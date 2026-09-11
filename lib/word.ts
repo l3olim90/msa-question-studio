@@ -1,7 +1,7 @@
 import katex from 'katex';
 import {DOMParser} from '@xmldom/xmldom';
 import {zipSync,strToU8} from 'fflate';
-import {mathParts} from './math-text';
+import {mathParts,repairLatex} from './math-text';
 import {escapeXML as esc} from './diagram';
 import {wordShapes} from './word-shapes';
 import type {Draft} from './schema';
@@ -29,7 +29,7 @@ function convert(n:any):string{
  default:return inside;
  }
 }
-export function equation(latex:string){const html=katex.renderToString(latex,{output:'mathml',throwOnError:true,strict:'ignore'});const dom=new DOMParser().parseFromString(html,'text/xml');const math=dom.getElementsByTagName('math')[0];if(!math)throw new Error('Equation conversion failed.');return `<m:oMath>${convert(math)}</m:oMath>`;}
+export function equation(latex:string){const html=katex.renderToString(repairLatex(latex),{output:'mathml',throwOnError:true,strict:'ignore'});const dom=new DOMParser().parseFromString(html,'text/xml');const math=dom.getElementsByTagName('math')[0];if(!math)throw new Error('Equation conversion failed.');return `<m:oMath>${convert(math)}</m:oMath>`;}
 function paragraph(text:string,style=''){let pos=0,out='';for(const m of mathParts(text)){if(m.index>pos)out+=run(text.slice(pos,m.index));out+=equation(m.latex);pos=m.index+m.raw.length;}out+=run(text.slice(pos));return `<w:p><w:pPr>${style?`<w:pStyle w:val="${style}"/>`:''}<w:spacing w:after="160"/><w:jc w:val="left"/></w:pPr>${out}</w:p>`;}
 function run(t:string){return t.split('\n').map((s,i)=>(i?'<w:r><w:br/></w:r>':'')+`<w:r><w:t xml:space="preserve">${esc(s.replace(/\\\$/g,'$'))}</w:t></w:r>`).join('');}
 export function wordDocument(d:Draft,images:Uint8Array[],refs:string[]=[]){

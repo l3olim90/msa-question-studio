@@ -1,3 +1,4 @@
+import {repairLatex,repairMathText} from '../lib/math-text';
 import {desmosExpressions} from '../lib/desmos';
 import {renderGraphShapes} from '../lib/graph';
 import {generateMcqCandidates} from '../lib/candidates';
@@ -128,3 +129,8 @@ const threeParts={...d,parts:[{label:'(a)',prompt:'Find the conjugate.'},{label:
 const dimensionDraft={...d,diagrams:[{graph:null,placement:'question' as const,caption:'Editable dimension diagram',shapes:[{...shape,type:'rect' as const,x:150,y:100,width:350,height:150},{...shape,type:'measurement' as const,x:150,y:300,x2:500,y2:300},{...shape,type:'math' as const,x:290,y:345,text:'2x'},{...shape,type:'text' as const,x:140,y:85,text:'A'}]}]};
 const dimensionDoc=wordDocument(dimensionDraft,[]);fs.writeFileSync('test-output/dimension-style.docx',dimensionDoc);const dimensionXml=strFromU8(unzipSync(dimensionDoc)['word/document.xml']);assert(dimensionXml.includes('w="28575"'));assert(dimensionXml.includes('<a:headEnd'));assert(dimensionXml.includes('<a:tailEnd'));assert(dimensionXml.includes('<wps:txbx><w:txbxContent><w:p>'));assert(dimensionXml.includes('<m:oMath>'));assert(!dimensionXml.includes('val="14233b"'));assert(svgDiagram(dimensionDraft.diagrams[0]).includes('marker-start'));
 console.log('PASS: automatic 2-6 parts, fixed part count, black 2.25 pt outlines, dimension arrowheads and native diagram equations.');
+
+const corruptFraction='\u000crac{6^2}{9^2}';assert.equal(repairLatex(corruptFraction),'\\frac{6^2}{9^2}');assert.equal(repairMathText('Prose\ntext remains. $'+corruptFraction+'$'),'Prose\ntext remains. $\\frac{6^2}{9^2}$');
+const repairedDraft=validateDraft({...d,solutions:[{...d.solutions[0],content:'Compute $'+corruptFraction+'$.'}]},ctx);assert(repairedDraft.solutions[0].content.includes('\\frac'));assert(equation(corruptFraction).includes('<m:f>'));assert.equal(repairLatex('\\frac{1}{2}'),'\\frac{1}{2}');assert.equal(repairLatex('x+1\ny+2'),'x+1\ny+2');
+assert.equal(repairLatex('\tfrac{1}{2}'),'\\tfrac{1}{2}');assert.equal(repairLatex('\right)'),'\\right)');
+console.log('PASS: corrupted JSON LaTeX escape repair, unchanged valid maths/prose and editable Word fractions.');
