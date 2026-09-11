@@ -78,3 +78,5 @@ Function graphs now use bounded mathjs evaluation of explicit y=f(x) expressions
 Community Desmos MCP implementations were found, but the user selected editable SVG rendering without a separate Desmos key/service. No Desmos integration or Desmos rendering is claimed. Tests cover cubic path output, quadratic interpolation accuracy, arrow directions, labels, rejected expressions and asymptote separation.
 
 Native grouped Word export was opened in desktop Microsoft Word, ungrouped into ten individual shapes, recoloured and relabelled, saved and reopened successfully. Word PDF rendering was visually checked. Curve geometry uses native cubic Bezier nodes; no image conversion or SVG editor is required.
+
+MCQ results never show the configuration-adjustment error panel. Hidden Structured part controls are omitted from MCQ model briefs; format enforcement is not reported as a configuration conflict. Structured adjustment explanations and actual request failures retain their existing handling.
