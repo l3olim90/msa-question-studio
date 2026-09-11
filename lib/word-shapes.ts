@@ -1,14 +1,15 @@
+import {layoutLabels,labelMetrics} from './label-layout';
 import type {Draft} from './schema';
 import {mathParts} from './math-text';
 import {escapeXML as esc} from './diagram';
 const unit=(v:number)=>Math.round(v*6858);
 const fill=(c:string)=>c==='none'?'<a:noFill/>':`<a:solidFill><a:srgbClr val="${c.replace('#','')}"/></a:solidFill>`;
 export function wordShapes(diagram:Draft['diagrams'][number],id:number,equation:(latex:string)=>string){
- const shapes=diagram.shapes.map((s,index)=>{
+ const shapes=layoutLabels(diagram.shapes).map((s,index)=>{
   let x=s.x,y=s.y,w=s.width,h=s.height,geom='',text='';
   const isText=s.type==='text'||s.type==='math';
   if(isText){
-   y=Math.max(0,y-21);w=Math.max(40,800-x);h=40;
+   const metrics=labelMetrics(s);y=Math.max(0,y-22);w=metrics.width;h=metrics.height;
    geom='<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>';
    const plain=(value:string)=>`<w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:sz w:val="22"/></w:rPr><w:t xml:space="preserve">${esc(value)}</w:t></w:r>`;
    let content='';
@@ -28,7 +29,7 @@ export function wordShapes(diagram:Draft['diagrams'][number],id:number,equation:
    else path+=points.slice(1).map(p=>`<a:lnTo>${pt(p)}</a:lnTo>`).join('');
    geom=`<a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="0" t="0" r="r" b="b"/><a:pathLst><a:path w="${unit(w)}" h="${unit(h)}" fill="none">${path}</a:path></a:pathLst></a:custGeom>`;
   }
-  return `<wps:wsp><wps:cNvPr id="${id*100+index+1}" name="${s.type} ${index+1}"/><wps:cNvSpPr${isText?' txBox="1"':''}/><wps:spPr><a:xfrm><a:off x="${unit(x)}" y="${unit(y)}"/><a:ext cx="${unit(w)}" cy="${unit(h)}"/></a:xfrm>${geom}${fill(isText?'none':s.fill)}<a:ln w="28575">${isText?'<a:noFill/>':fill('#000000')}${s.type==='measurement'?'<a:headEnd type="triangle" w="med" len="med"/>':''}${s.type==='arrow'||s.type==='measurement'?'<a:tailEnd type="triangle" w="med" len="med"/>':''}</a:ln></wps:spPr>${text}<wps:bodyPr lIns="0" tIns="0" rIns="0" bIns="0" anchor="t"><a:noAutofit/></wps:bodyPr></wps:wsp>`;
+  return `<wps:wsp><wps:cNvPr id="${id*100+index+1}" name="${s.type} ${index+1}"/><wps:cNvSpPr${isText?' txBox="1"':''}/><wps:spPr><a:xfrm><a:off x="${unit(x)}" y="${unit(y)}"/><a:ext cx="${unit(w)}" cy="${unit(h)}"/></a:xfrm>${geom}${fill(isText?'none':s.fill)}<a:ln w="19050">${isText?'<a:noFill/>':fill('#000000')}${s.type==='measurement'?'<a:headEnd type="triangle" w="med" len="med"/>':''}${s.type==='arrow'||s.type==='measurement'?'<a:tailEnd type="triangle" w="med" len="med"/>':''}</a:ln></wps:spPr>${text}<wps:bodyPr lIns="0" tIns="0" rIns="0" bIns="0" anchor="t"><a:noAutofit/></wps:bodyPr></wps:wsp>`;
  }).join('');
  return `<w:p><w:pPr><w:spacing w:before="0" w:after="0"/><w:keepNext/></w:pPr><w:r><w:drawing><wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="0" behindDoc="0" locked="0" layoutInCell="1" allowOverlap="0"><wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH><wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV><wp:extent cx="5486400" cy="3429000"/><wp:wrapTopAndBottom/><wp:docPr id="${id}" name="Editable diagram ${id}" descr="${esc(diagram.caption)}"/><a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup"><wpg:wgp><wpg:cNvGrpSpPr/><wpg:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="5486400" cy="3429000"/><a:chOff x="0" y="0"/><a:chExt cx="5486400" cy="3429000"/></a:xfrm></wpg:grpSpPr>${shapes}</wpg:wgp></a:graphicData></a:graphic></wp:anchor></w:drawing></w:r></w:p>`;
 }

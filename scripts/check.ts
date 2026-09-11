@@ -1,3 +1,4 @@
+import {layoutLabels,labelMetrics} from '../lib/label-layout';
 import {repairLatex,repairMathText} from '../lib/math-text';
 import {desmosExpressions} from '../lib/desmos';
 import {renderGraphShapes} from '../lib/graph';
@@ -127,10 +128,15 @@ console.log('PASS: bounded dashed divider and visible curve equation label.');
 const autoContext=retrieve({...brief,multipleParts:true,autoParts:true,partCount:2});
 const threeParts={...d,parts:[{label:'(a)',prompt:'Find the conjugate.'},{label:'(b)',prompt:'Find the modulus.'},{label:'(c)',prompt:'Find the argument.'}]};validateDraft(threeParts,autoContext);assert.throws(()=>validateDraft(threeParts,retrieve({...brief,multipleParts:true,autoParts:false,partCount:2})));assert.throws(()=>validateDraft({...threeParts,parts:[threeParts.parts[0]]},autoContext));
 const dimensionDraft={...d,diagrams:[{graph:null,placement:'question' as const,caption:'Editable dimension diagram',shapes:[{...shape,type:'rect' as const,x:150,y:100,width:350,height:150},{...shape,type:'measurement' as const,x:150,y:300,x2:500,y2:300},{...shape,type:'math' as const,x:290,y:345,text:'2x'},{...shape,type:'text' as const,x:140,y:85,text:'A'}]}]};
-const dimensionDoc=wordDocument(dimensionDraft,[]);fs.writeFileSync('test-output/dimension-style.docx',dimensionDoc);const dimensionXml=strFromU8(unzipSync(dimensionDoc)['word/document.xml']);assert(dimensionXml.includes('w="28575"'));assert(dimensionXml.includes('<a:headEnd'));assert(dimensionXml.includes('<a:tailEnd'));assert(dimensionXml.includes('<wps:txbx><w:txbxContent><w:p>'));assert(dimensionXml.includes('<m:oMath>'));assert(!dimensionXml.includes('val="14233b"'));assert(svgDiagram(dimensionDraft.diagrams[0]).includes('marker-start'));
-console.log('PASS: automatic 2-6 parts, fixed part count, black 2.25 pt outlines, dimension arrowheads and native diagram equations.');
+const dimensionDoc=wordDocument(dimensionDraft,[]);fs.writeFileSync('test-output/dimension-style.docx',dimensionDoc);const dimensionXml=strFromU8(unzipSync(dimensionDoc)['word/document.xml']);assert(dimensionXml.includes('w="19050"'));assert(dimensionXml.includes('<a:headEnd'));assert(dimensionXml.includes('<a:tailEnd'));assert(dimensionXml.includes('<wps:txbx><w:txbxContent><w:p>'));assert(dimensionXml.includes('<m:oMath>'));assert(!dimensionXml.includes('val="14233b"'));assert(svgDiagram(dimensionDraft.diagrams[0]).includes('marker-start'));
+console.log('PASS: automatic 2-6 parts, fixed part count, black 1.5 pt outlines, dimension arrowheads and native diagram equations.');
 
 const corruptFraction='\u000crac{6^2}{9^2}';assert.equal(repairLatex(corruptFraction),'\\frac{6^2}{9^2}');assert.equal(repairMathText('Prose\ntext remains. $'+corruptFraction+'$'),'Prose\ntext remains. $\\frac{6^2}{9^2}$');
 const repairedDraft=validateDraft({...d,solutions:[{...d.solutions[0],content:'Compute $'+corruptFraction+'$.'}]},ctx);assert(repairedDraft.solutions[0].content.includes('\\frac'));assert(equation(corruptFraction).includes('<m:f>'));assert.equal(repairLatex('\\frac{1}{2}'),'\\frac{1}{2}');assert.equal(repairLatex('x+1\ny+2'),'x+1\ny+2');
 assert.equal(repairLatex('\tfrac{1}{2}'),'\\tfrac{1}{2}');assert.equal(repairLatex('\right)'),'\\right)');
 console.log('PASS: corrupted JSON LaTeX escape repair, unchanged valid maths/prose and editable Word fractions.');
+
+const spaced=layoutLabels([{...shape,type:'text',x:200,y:180,text:'Upper measurement'},{...shape,type:'math',x:200,y:180,text:'2x'},{...shape,type:'text',x:200,y:180,text:'Second measurement'}]);
+for(let i=0;i<spaced.length;i++)for(let j=i+1;j<spaced.length;j++){const a=spaced[i],b=spaced[j],am=labelMetrics(a),bm=labelMetrics(b);assert(a.x+am.width<=b.x||b.x+bm.width<=a.x||a.y+am.height<=b.y||b.y+bm.height<=a.y);}
+assert.deepEqual(layoutLabels(spaced),spaced);
+console.log('PASS: overlapping text labels are separated without testing shape-edge collisions.');
