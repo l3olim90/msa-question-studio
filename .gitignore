@@ -40,3 +40,4 @@ next-env.d.ts
 /test-output/
 /scripts/check.mjs
 *.tsbuildinfo
+/scripts/providers-check.mjs

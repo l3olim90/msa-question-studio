@@ -4,7 +4,7 @@ A web interface and server-side retrieval/generation workflow built from the ver
 
 ## Use
 
-Select module, topic, sub-topic and difficulty, enter any additional specifications and your OpenAI API key, then generate. The fixed model is `gpt-5.6-sol` with `reasoning.effort: high`. API access and billing depend on your API account. The key is held only in React memory and sent to this app's backend for each generation; it is not written to local storage, cookies, logs or a database. Closing/reloading the page clears it. Responses requests use `store: false`; OpenAI's API data policies still apply.
+Select module, topic, sub-topic and difficulty, enter any additional specifications, select your provider and enter its API key, then generate. OpenAI defaults to `gpt-5.6-sol` with High reasoning. Anthropic defaults to `claude-sonnet-5` with `output_config.effort: high` and adaptive thinking. Azure uses your deployment name with High reasoning; that deployment must support Responses, images, structured outputs and tools. API access and billing depend on the selected provider account. Azure requires its own resource key, HTTPS resource endpoint and deployment name. Keys are not interchangeable between providers. The key is held only in React memory and sent to this app's backend for each generation; it is not written to local storage, cookies, logs or a database. Closing/reloading the page clears it. OpenAI and Azure Responses requests use `store: false`. Provider data policies still apply. Switching providers clears the key field.
 
 Preview the question and solutions, navigate alternative methods, inspect the retrieved references and proposed marks, then request edits. Edits reuse the draft's original brief, so changing the dropdowns does not silently change an existing draft. Each revision receives a fresh review. A failed automated review stays visible and does not masquerade as a passed check.
 
@@ -38,9 +38,10 @@ Backend code: `lib/retrieval.ts`, `lib/generation.ts`, `lib/calculator.ts`. Outp
 
 TypeScript checks and production build passed. Tests cover active scope filtering, retrieval, calculator restrictions, marking totals, SVG escaping/structure, native Word equation XML and mocked generation with a calculator call. A Word export was opened in Microsoft Word, its native equation objects counted, exported to PDF and visually inspected. The packaged LibreOffice renderer was unavailable, so Microsoft Word was used for that check.
 
-Live OpenAI generation has not been exercised because no API key was provided. The first key-backed generation is still an integration check. Browser interaction testing was not requested. Optional WebMCP brief configuration is feature-detected; no supported WebMCP validation context was available, so it is not claimed as tested.
+Live generation has not been exercised. Provider routing, Anthropic image/tool continuity and High effort, and Azure endpoint restrictions and authentication were tested with mock credentials. No pasted user key was used. The first key-backed generation is still an integration check. Browser interaction testing was not requested. Optional WebMCP brief configuration is feature-detected; no supported WebMCP validation context was available, so it is not claimed as tested.
 
 ## Official API references
 
 - [GPT-5.6 Sol](https://developers.openai.com/api/docs/models/gpt-5.6-sol)
 - [Responses API](https://developers.openai.com/api/reference/typescript/resources/responses/methods/create)
+
