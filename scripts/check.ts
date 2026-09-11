@@ -1,7 +1,7 @@
 import {renderGraphShapes} from '../lib/graph';
 import {generateMcqCandidates} from '../lib/candidates';
 import assert from 'node:assert/strict';import fs from 'node:fs';
-import {retrieve,references,topicWideMcqBrief} from '../lib/retrieval';import {calculate} from '../lib/calculator';import {generate,validateDraft,validatePlan} from '../lib/generation';import {wordDocument,equation} from '../lib/word';import {svgDiagram} from '../lib/diagram';import {unzipSync,strFromU8} from 'fflate';
+import {retrieve,references,topicWideMcqBrief} from '../lib/retrieval';import {calculate,compilePlotFunction} from '../lib/calculator';import {generate,validateDraft,validatePlan} from '../lib/generation';import {wordDocument,equation} from '../lib/word';import {svgDiagram} from '../lib/diagram';import {unzipSync,strFromU8} from 'fflate';
 const brief={module:'EM1',topic:'EM1-2',subtopics:['EM1-2.3'],totalMarks:4,difficulty:'Intermediate',specifications:'Use rectangular complex numbers.'};
 const ctx=retrieve(brief);assert(ctx.examples.length>0);assert(ctx.examples.every(q=>q.retrieval_status==='Eligible'));assert.throws(()=>retrieve({...brief,subtopics:['EM1-3.9H']}));assert.throws(()=>retrieve({...brief,difficulty:'Hard'}));assert.equal(calculate('det([[1,2],[3,4]])'),'-2');assert.equal(calculate('conj(4+2i)'),'4 - 2i');assert.throws(()=>calculate('import("fs")'));assert.throws(()=>calculate('a=3'));
 for(const invalid of [0,-1,1.5,'4',null])assert.throws(()=>retrieve({...brief,totalMarks:invalid}));
@@ -99,10 +99,15 @@ const discontinuous=renderGraphShapes({...graph,y_min:-5,y_max:5,curves:[{...gra
 for(const s of graphShapes.filter(s=>s.type==='curve'))for(let i=0;i+3<s.points.length;i+=3){const [p0,p1,p2,p3]=s.points.slice(i,i+4);const px=(p0.x+3*p1.x+3*p2.x+p3.x)/8,py=(p0.y+3*p1.y+3*p2.y+p3.y)/8;const x=-3+(px-65)/680*6,y=10-(py-50)/380*12;assert(Math.abs(y-x*x)<0.001);}
 console.log('PASS: smooth cubic graph paths, no grid, positive-axis arrows, labels, bounded plotting and asymptote separation.');
 
-const graphWord=wordDocument({...d,diagrams:[{caption:'Smooth graph',placement:'question',graph,shapes:graphShapes}]},[]);
+const graphWord=wordDocument({...d,diagrams:[{caption:'Smooth graph',placement:'question',graph:null,shapes:graphShapes}]},[]);
 const graphXml=strFromU8(unzipSync(graphWord)['word/document.xml']);
 assert(graphXml.includes('<wpg:wgp>'));assert(graphXml.includes('<a:cubicBezTo>'));assert(graphXml.includes('<wps:txbx>'));assert(graphXml.includes('<wp:anchor'));assert(graphXml.includes('locked="0"'));assert(!graphXml.includes('<pic:pic>'));assert(!Object.keys(unzipSync(graphWord)).some(k=>k.startsWith('word/media/')));
 fs.writeFileSync('test-output/native-vector-export.docx',graphWord);
 console.log('PASS: native grouped Word shapes, cubic geometry, editable text and unlocked floating group; no raster or SVG picture dependency.');
 
 const crops=JSON.parse(fs.readFileSync("data/reference-crops.json","utf8"));for(const q of snapshot.questions){assert(crops[q.question_id]?.length);for(const c of crops[q.question_id])assert(fs.existsSync("public"+c.url));}
+
+for(const expression of ["x^3-3*x+2","y = x^3-3*x+2","f(x)=x³−3*x+2","y=x^{3}-3*x+2"]){assert.equal(compilePlotFunction(expression)(2),4);assert(renderGraphShapes({...graph,curves:[{...graph.curves[0],expression}]}).some(s=>s.type==="curve"));}
+assert.throws(()=>compilePlotFunction("a=3"));assert.throws(()=>compilePlotFunction("y=x; a=3"));
+
+const desmosDoc=unzipSync(wordDocument({...d,diagrams:[{caption:"Cubic",placement:"question",graph,shapes:graphShapes}]},[png]));assert(desmosDoc["word/media/graph0.png"]);assert(strFromU8(desmosDoc["word/document.xml"]).includes("<pic:pic>"));

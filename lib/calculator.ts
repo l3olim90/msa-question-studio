@@ -11,7 +11,12 @@ export function calculate(expression:string){
 export function compilePlotFunction(expression:string){
  if(typeof expression!=='string'||expression.length>200)throw new Error('Graph expression is too long.');
  const functions=new Set(['sqrt','abs','sin','cos','tan','asin','acos','atan','exp','log','log10']);
- const node=math.parse(expression);let count=0;
+ // Accept conventional explicit-function notation without enabling assignment evaluation.
+ const normalized=normalizePlot(expression);
+ const node=math.parse(normalized);let count=0;
  node.traverse((n:any)=>{if(++count>80||!['OperatorNode','ConstantNode','SymbolNode','FunctionNode','ParenthesisNode'].includes(n.type))throw new Error('Unsupported graph expression.');if(n.type==='FunctionNode'&&!functions.has(n.fn.name))throw new Error('Unsupported graph function.');if(n.type==='SymbolNode'&&!functions.has(n.name)&&!['x','pi','e'].includes(n.name))throw new Error('Graph expressions must use x as the variable.');if(n.type==='OperatorNode'&&!['+','-','*','/','^'].includes(n.op))throw new Error('Unsupported graph operator.');});
  const compiled=node.compile();return (x:number)=>{try{const y=compiled.evaluate({x});return typeof y==='number'&&Number.isFinite(y)?y:null;}catch{return null;}};
 }
+
+function normalizePlot(expression:string){return expression.trim().replace(/^\s*(?:y|f\(x\))\s*=\s*/, '').replace(/−/g,'-').replace(/²/g,'^2').replace(/³/g,'^3').replace(/\^\{([+-]?\d+)\}/g,'^($1)');}
+export function plotLatex(expression:string){compilePlotFunction(expression);return math.parse(normalizePlot(expression)).toTex();}
