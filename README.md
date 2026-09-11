@@ -10,7 +10,7 @@ The sub-topic checklist includes All, selecting every active sub-topic within th
 
 Preview the question and solutions, navigate alternative methods, inspect the retrieved references and proposed marks, then request edits. Edits reuse the draft's original brief, so changing the dropdowns does not silently change an existing draft. Each revision receives a fresh review. A failed automated review stays visible and does not masquerade as a passed check.
 
-Diagrams consist only of SVG lines, arrows, rectangles, ellipses, polylines and labels. Basic positions and labels can be edited in the app; download the SVG for full editing in a vector editor. Word export includes native Office Math (OMML) equations and SVG diagrams with PNG compatibility fallbacks. This is editable Word equation content, not MathType objects; conversion to MathType depends on the user's installed MathType tooling.
+Diagrams consist only of SVG lines, arrows, rectangles, ellipses, polylines and labels. Basic positions and labels can be edited in the app; download the SVG for full editing in a vector editor. Word export includes native Office Math (OMML) equations and native grouped DrawingML shapes, with editable labels and cubic curve points. In desktop Word, select the diagram and use Shape Format > Group > Ungroup. This is editable Word equation content, not MathType objects; conversion to MathType depends on the user's installed MathType tooling.
 
 ## Pipeline
 
@@ -69,3 +69,12 @@ Refinement is directly below the draft heading. Export Word is prominent and exp
 MCQ mode hides sub-topic selection. The server expands the selected main topic to its active sub-topic pool, ignoring stale hidden selections. Each new generation returns three candidates; each chooses a suitable subset and receives its own source retrieval, calculations and review. Candidates are generated sequentially with earlier questions supplied to discourage repeated concepts; exact repeats or failed overall reviews receive one replacement attempt. A set is returned only when all three pass these checks. This requires more provider calls than generating one question.
 
 Previous/Next and numbered navigation switch the question, solution, references and adjustment information together. Refinement and Word export operate on the currently displayed candidate; editing one preserves the others. Automatic choice from the MCQ topic pool is not displayed as an omitted-user-selection error. Structured question controls and behaviour are unchanged. The empty-state copy and header icon are subject-neutral.
+
+
+## Function graphs
+
+Function graphs now use bounded mathjs evaluation of explicit y=f(x) expressions and emit cubic Bezier SVG paths, rather than polylines. Graph metadata includes numeric bounds, domains, axis labels and optional labelled points. The renderer fixes the layout to no grid and one arrowhead at the positive end of each axis, includes the origin, and separates discontinuities instead of connecting across asymptotes. Non-graph diagrams retain the existing editable shape system. The generated SVG is used by the preview and SVG download; Word export uses equivalent native grouped shapes; refine can change a function/domain, while external vector editors can edit the cubic control points.
+
+Community Desmos MCP implementations were found, but the user selected editable SVG rendering without a separate Desmos key/service. No Desmos integration or Desmos rendering is claimed. Tests cover cubic path output, quadratic interpolation accuracy, arrow directions, labels, rejected expressions and asymptote separation.
+
+Native grouped Word export was opened in desktop Microsoft Word, ungrouped into ten individual shapes, recoloured and relabelled, saved and reopened successfully. Word PDF rendering was visually checked. Curve geometry uses native cubic Bezier nodes; no image conversion or SVG editor is required.

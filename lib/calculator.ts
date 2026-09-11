@@ -7,3 +7,11 @@ export function calculate(expression:string){
  node.traverse((n:any)=>{if(++count>120)throw new Error('Calculation too complex.');if(!['OperatorNode','ConstantNode','SymbolNode','FunctionNode','ParenthesisNode','ArrayNode'].includes(n.type))throw new Error('Unsupported calculation syntax.');if(n.type==='FunctionNode'&&!allowed.has(n.fn.name))throw new Error('Unsupported function.');if(n.type==='SymbolNode'&&!allowed.has(n.name)&&!['pi','e','i','x','y','t'].includes(n.name))throw new Error('Unsupported symbol.');if(n.type==='OperatorNode'&&!['+','-','*','/','^'].includes(n.op))throw new Error('Unsupported operator.');});
  const result=String(node.evaluate());if(result.length>4000)throw new Error('Result too long.');return result;
 }
+
+export function compilePlotFunction(expression:string){
+ if(typeof expression!=='string'||expression.length>200)throw new Error('Graph expression is too long.');
+ const functions=new Set(['sqrt','abs','sin','cos','tan','asin','acos','atan','exp','log','log10']);
+ const node=math.parse(expression);let count=0;
+ node.traverse((n:any)=>{if(++count>80||!['OperatorNode','ConstantNode','SymbolNode','FunctionNode','ParenthesisNode'].includes(n.type))throw new Error('Unsupported graph expression.');if(n.type==='FunctionNode'&&!functions.has(n.fn.name))throw new Error('Unsupported graph function.');if(n.type==='SymbolNode'&&!functions.has(n.name)&&!['x','pi','e'].includes(n.name))throw new Error('Graph expressions must use x as the variable.');if(n.type==='OperatorNode'&&!['+','-','*','/','^'].includes(n.op))throw new Error('Unsupported graph operator.');});
+ const compiled=node.compile();return (x:number)=>{try{const y=compiled.evaluate({x});return typeof y==='number'&&Number.isFinite(y)?y:null;}catch{return null;}};
+}
