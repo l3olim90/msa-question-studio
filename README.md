@@ -45,3 +45,5 @@ Live generation has not been exercised. Provider routing, Anthropic image/tool c
 - [GPT-5.6 Sol](https://developers.openai.com/api/docs/models/gpt-5.6-sol)
 - [Responses API](https://developers.openai.com/api/reference/typescript/resources/responses/methods/create)
 
+
+Azure course configurations: enter the resource endpoint, chat deployment name and optional dated API version. A dated version uses deployment-scoped Chat Completions; leaving it blank uses Responses v1. Embedding deployment settings are not needed for the current metadata/lexical retriever. All providers use manual redirects and reject 3xx responses without forwarding credentials.
