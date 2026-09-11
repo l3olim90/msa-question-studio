@@ -80,3 +80,5 @@ Community Desmos MCP implementations were found, but the user selected editable 
 Native grouped Word export was opened in desktop Microsoft Word, ungrouped into ten individual shapes, recoloured and relabelled, saved and reopened successfully. Word PDF rendering was visually checked. Curve geometry uses native cubic Bezier nodes; no image conversion or SVG editor is required.
 
 MCQ results never show the configuration-adjustment error panel. Hidden Structured part controls are omitted from MCQ model briefs; format enforcement is not reported as a configuration conflict. Structured adjustment explanations and actual request failures retain their existing handling.
+
+MCQ review uses the same normalized authoring brief as generation, distinguishes the main-topic pool from chosen coverage, and does not treat false in-syllabus distractors as scope violations. A scope/format failure after repair triggers the existing bounded candidate retry; provider errors still propagate. Exhausted review reports its concrete issues. Mock regression exercises failed repair followed by a successful replacement candidate; live provider reproduction was not performed.

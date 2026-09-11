@@ -63,7 +63,7 @@ for(const repaired of [true,false]){
  let reviews=0,authored=0;
  globalThis.fetch=async(_u:any,init:any)=>{const req=JSON.parse(init.body);let value:any;
  if(req.text.format.name==='marks_feasibility')value={...feasible,total_marks:2};
- else if(req.text.format.name==='review'){reviews++;value={passed:reviews>1&&repaired,scope_passed:reviews>1&&repaired,format_passed:true,issues:reviews===1||!repaired?['Remove the outside-module derivation.']:[],summary:'Fixture scope check.'};}
+ else if(req.text.format.name==='review'){const reviewed=JSON.parse(req.input);assert(!('partCount' in reviewed.brief));assert(!('multipleParts' in reviewed.brief));reviews++;value={passed:reviews>1&&repaired,scope_passed:reviews>1&&repaired,format_passed:true,issues:reviews===1||!repaired?['Remove the outside-module derivation.']:[],summary:'Fixture scope check.'};}
  else{authored++;value=mcq;}
  return Response.json({output:[{type:'message',content:[{type:'output_text',text:JSON.stringify(value)}]}]});};
  try{if(repaired){const result=await generate('test-key',{...brief,questionType:'MCQ'});assert.equal(result.draft.total_marks,2);assert(result.review.scope_passed);}else await assert.rejects(()=>generate('test-key',{...brief,questionType:'MCQ'}),/module-scope/);assert.equal(authored,2);assert.equal(reviews,2);}finally{globalThis.fetch=oldFetch;}
@@ -78,15 +78,15 @@ console.log('PASS: every source screenshot exists; Basic and MCQ benchmark retri
 
 // Main-topic MCQ batches ignore stale hidden sub-topic selections and produce three reviewed candidates.
 const wide=topicWideMcqBrief({...brief,questionType:'MCQ',subtopics:['invalid-hidden-id']});assert.deepEqual(new Set(wide.subtopics),new Set(allIds));
-let batchAuthored=0;const contexts:{index:number;prior:any[]}[]=[];
+let batchAuthored=0;let batchReviews=0;const contexts:{index:number;prior:any[]}[]=[];
 globalThis.fetch=async(_u:any,init:any)=>{const req=JSON.parse(init.body);let value:any;
  if(req.text.format.name==='marks_feasibility'){
   const supplied=JSON.parse(req.input[0].content[0].text);assert.deepEqual(new Set(supplied.brief.subtopics),new Set(allIds));contexts.push(supplied.candidate_context);
   value={...feasible,total_marks:2,omitted_subtopics:allIds.filter(id=>!brief.subtopics.includes(id)).map(id=>({id,reason:'A different suitable concept is selected for this candidate.'}))};
- }else if(req.text.format.name==='review')value={passed:true,scope_passed:true,format_passed:true,issues:[],summary:'Candidate fixture review.'};
+ }else if(req.text.format.name==='review'){batchReviews++;value={passed:batchReviews>2,scope_passed:batchReviews>2,format_passed:true,issues:batchReviews<=2?['Fixture scope failure requiring a new candidate.']:[],summary:'Candidate fixture review.'};}
  else{batchAuthored++;value={...mcq,question:batchAuthored<=2?mcq.question:`Distinct conceptual fixture ${batchAuthored}: ${mcq.question}`};}
  return Response.json({output:[{type:'message',content:[{type:'output_text',text:JSON.stringify(value)}]}]});};
-try{const batch=await generateMcqCandidates('test-key',{...brief,questionType:'MCQ',subtopics:[]});assert.equal(batch.candidates.length,3);assert.equal(new Set(batch.candidates.map(c=>c.draft.question)).size,3);assert(batch.candidates.every(c=>c.review.passed&&c.draft.total_marks===2));assert.equal(batchAuthored,4);assert.deepEqual(contexts.map(c=>c.index),[1,2,2,3]);assert.equal(contexts[2].prior.length,2);}finally{globalThis.fetch=oldFetch;}
+try{const batch=await generateMcqCandidates('test-key',{...brief,questionType:'MCQ',subtopics:[]});assert.equal(batch.candidates.length,3);assert.equal(new Set(batch.candidates.map(c=>c.draft.question)).size,3);assert(batch.candidates.every(c=>c.review.passed&&c.draft.total_marks===2));assert.equal(batchAuthored,5);assert.deepEqual(contexts.map(c=>c.index),[1,1,2,3]);assert.equal(contexts[2].prior.length,1);}finally{globalThis.fetch=oldFetch;}
 console.log('PASS: main-topic three-MCQ batches, per-candidate reviews and duplicate replacement.');
 
 const graph={x_min:-3,x_max:3,y_min:-2,y_max:10,x_label:'x',y_label:'y',curves:[{expression:'x^2',domain_min:-3,domain_max:3,color:'#174bc7' as const}],points:[{x:0,y:0,label:'O'}]};
