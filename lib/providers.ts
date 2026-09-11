@@ -1,6 +1,13 @@
 import {z} from 'zod';
 export const connectionSchema=z.object({provider:z.enum(['openai','azure','anthropic']).default('openai'),endpoint:z.string().max(250).default(''),deployment:z.string().max(100).default('')});
 export type Connection=z.infer<typeof connectionSchema> & {apiVersion?:string};
+export async function providerError(r:Response,provider:string,key:string){
+ let error:any;try{const data:any=await r.json();error=data.error||data;}catch{error={};}
+ const clean=(value:unknown)=>typeof value==='string'?value.split(key).join('[redacted]').replace(/Bearer\s+\S+/gi,'Bearer [redacted]').replace(/sk-[a-zA-Z0-9_-]+/g,'[redacted]').replace(/[\u0000-\u001f]/g,' ').slice(0,1000):'';
+ const message=clean(error.message),code=clean(error.code||error.type),param=clean(error.param);
+ const fallback=r.status===401?'The API key was not accepted.':r.status===429?'Rate or credit limit reached.':r.status===403||r.status===404?'Check model access, resource endpoint and deployment name.':'The provider rejected the request.';
+ return new Error(`${provider} request failed (${r.status})${code?` [${code}]`:''}${param?` (${param})`:''}: ${message||fallback}`);
+}
 export function chatMessages(input:any){if(typeof input==='string')return [{role:'user',content:input}];return input.flatMap((item:any)=>{if(item.type==='chat_message')return [item._chatMessage];if(item.type==='function_call_output')return [{role:'tool',tool_call_id:item.call_id,content:item.output}];if(!item.role)return [];return [{role:item.role,content:typeof item.content==='string'?item.content:item.content.map((b:any)=>b.type==='input_image'?{type:'image_url',image_url:{url:b.image_url,detail:'high'}}:{type:'text',text:b.text})}];});}
 export function azureURL(endpoint:string){const u=new URL(endpoint);if(u.protocol!=='https:'||u.username||u.password||u.port||u.search||u.hash||!/^([a-z0-9-]+)\.(openai\.azure\.com|cognitiveservices\.azure\.com|services\.ai\.azure\.com)$/.test(u.hostname)||!['','/','/openai/v1','/openai/v1/'].includes(u.pathname))throw new Error('Enter your Azure resource HTTPS endpoint, for example https://your-resource.openai.azure.com.');return `${u.origin}/openai/v1/responses`;}
 export function modelFor(c:Connection){return c.provider==='anthropic'?'claude-sonnet-5':c.provider==='azure'?c.deployment:'gpt-5.6-sol';}
@@ -10,10 +17,14 @@ export async function providerResponse(key:string,body:any,connection:Connection
  const c=connectionSchema.parse(connection);const apiVersion=z.string().regex(/^\d{4}-\d{2}-\d{2}(?:-preview)?$/).optional().parse(connection.apiVersion||undefined);const model=modelFor(c);if(!model.trim())throw new Error('Enter your Azure deployment name.');
  let url='https://api.openai.com/v1/responses';let headers:Record<string,string>={'Content-Type':'application/json',Authorization:`Bearer ${key}`};let payload:any={model,reasoning:{effort:'high'},include:['reasoning.encrypted_content'],store:false,max_output_tokens:16000,...body};
  if(c.provider==='azure'){url=azureURL(c.endpoint);headers={'Content-Type':'application/json','api-key':key};if(apiVersion){url=`${new URL(url).origin}/openai/deployments/${encodeURIComponent(c.deployment)}/chat/completions?api-version=${apiVersion}`;payload={model,messages:[{role:'system',content:body.instructions},...chatMessages(body.input)],reasoning_effort:'high',max_completion_tokens:16000,response_format:{type:'json_schema',json_schema:{...body.text.format}},...(body.tools?{tools:body.tools.map((t:any)=>({type:'function',function:{name:t.name,description:t.description,parameters:t.parameters,strict:true}}))}:{})};delete payload.response_format.json_schema.type;}}
+ if(c.provider==='azure'){
+  if(apiVersion)payload.response_format.json_schema.schema=compatibleSchema(payload.response_format.json_schema.schema);
+  else payload.text={...payload.text,format:{...payload.text.format,schema:compatibleSchema(payload.text.format.schema)}};
+ }
  if(c.provider==='anthropic'){url='https://api.anthropic.com/v1/messages';headers={'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01'};payload={model,max_tokens:24000,thinking:{type:'adaptive'},system:body.instructions,messages:anthropicMessages(body.input),output_config:{effort:'high',format:{type:'json_schema',schema:compatibleSchema(body.text.format.schema)}},...(body.tools?{tools:body.tools.map((t:any)=>({name:t.name,description:t.description,input_schema:t.parameters,strict:true}))}:{})};}
  const r=await fetch(url,{method:'POST',headers,body:JSON.stringify(payload),redirect:'manual',signal:AbortSignal.timeout(180000)});
  if(r.status>=300&&r.status<400)throw new Error('The provider endpoint returned a redirect. Check the endpoint; the API key was not forwarded.');
- if(!r.ok){await r.text();throw new Error(r.status===401?'The selected provider did not accept this API key.':r.status===429?'Provider rate or credit limit reached.':r.status===403||r.status===404?'The selected model or Azure deployment is unavailable to this account.':`The ${c.provider} request failed (${r.status}). Check provider settings and model support.`);}
+ if(!r.ok)throw await providerError(r,c.provider,key);
  const data:any=await r.json();if(data.status==='incomplete'||data.stop_reason==='max_tokens')throw new Error('The model ran out of output space. Please simplify the request.');
  if(c.provider==='azure'&&apiVersion){const choice=data.choices?.[0];if(choice?.finish_reason==='length')throw new Error('The model ran out of output space. Please simplify the request.');const message=choice?.message;if(!message)throw new Error('Azure did not return a message.');return {output:[{type:'chat_message',_chatMessage:message},...(message.tool_calls||[]).map((t:any)=>({type:'function_call',name:t.function.name,call_id:t.id,arguments:t.function.arguments})),...(message.content?[{type:'message',content:[{type:'output_text',text:message.content}]}]:[])]};}
  if(c.provider!=='anthropic')return data;
