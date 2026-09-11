@@ -1,3 +1,4 @@
+import {desmosExpressions} from '../lib/desmos';
 import {renderGraphShapes} from '../lib/graph';
 import {generateMcqCandidates} from '../lib/candidates';
 import assert from 'node:assert/strict';import fs from 'node:fs';
@@ -89,7 +90,7 @@ globalThis.fetch=async(_u:any,init:any)=>{const req=JSON.parse(init.body);let va
 try{const batch=await generateMcqCandidates('test-key',{...brief,questionType:'MCQ',subtopics:[]});assert.equal(batch.candidates.length,3);assert.equal(new Set(batch.candidates.map(c=>c.draft.question)).size,3);assert(batch.candidates.every(c=>c.review.passed&&c.draft.total_marks===2));assert.equal(batchAuthored,5);assert.deepEqual(contexts.map(c=>c.index),[1,1,2,3]);assert.equal(contexts[2].prior.length,1);}finally{globalThis.fetch=oldFetch;}
 console.log('PASS: main-topic three-MCQ batches, per-candidate reviews and duplicate replacement.');
 
-const graph={x_min:-3,x_max:3,y_min:-2,y_max:10,x_label:'x',y_label:'y',curves:[{expression:'x^2',domain_min:-3,domain_max:3,color:'#174bc7' as const}],points:[{x:0,y:0,label:'O'}]};
+const graph={regions:[],x_min:-3,x_max:3,y_min:-2,y_max:10,x_label:'x',y_label:'y',curves:[{expression:'x^2',domain_min:-3,domain_max:3,color:'#174bc7' as const}],points:[{x:0,y:0,label:'O'}]};
 const graphShapes=renderGraphShapes(graph);assert(graphShapes.some(s=>s.type==='curve'));assert(!graphShapes.some(s=>s.type==='polyline'));const axes=graphShapes.filter(s=>s.type==='arrow');assert.equal(axes.length,2);assert(axes[0].x2>axes[0].x&&axes[0].y===axes[0].y2);assert(axes[1].y2<axes[1].y&&axes[1].x===axes[1].x2);assert(graphShapes.some(s=>s.type==='text'&&s.text==='x'));assert(graphShapes.some(s=>s.type==='text'&&s.text==='y'));
 assert.throws(()=>renderGraphShapes({...graph,curves:[{...graph.curves[0],expression:'import("fs")'}]}));
 const graphSvg=svgDiagram({caption:'Smooth parabola',placement:'question',graph,shapes:graphShapes});assert(graphSvg.includes('<path d="M '));assert(graphSvg.includes('C '));assert(!graphSvg.includes('<polyline'));assert(!graphSvg.includes('marker-start'));fs.writeFileSync('test-output/smooth-graph.svg',graphSvg);
@@ -111,3 +112,9 @@ for(const expression of ["x^3-3*x+2","y = x^3-3*x+2","f(x)=x³−3*x+2","y=x^{3}
 assert.throws(()=>compilePlotFunction("a=3"));assert.throws(()=>compilePlotFunction("y=x; a=3"));
 
 const desmosDoc=unzipSync(wordDocument({...d,diagrams:[{caption:"Cubic",placement:"question",graph,shapes:graphShapes}]},[png]));assert(desmosDoc["word/media/graph0.png"]);assert(strFromU8(desmosDoc["word/document.xml"]).includes("<pic:pic>"));
+
+const shaded={...graph,regions:[{lower:'0',upper:'x^3',x_min:0,x_max:2,color:'#174bc7'}]};
+const shadedExpressions=desmosExpressions(shaded);assert(shadedExpressions[0].latex.includes('\\le y\\le'));assert(shadedExpressions[0].latex.includes('0\\le x\\le 2'));assert.equal(shadedExpressions[0].fillOpacity,0.25);
+assert.throws(()=>desmosExpressions({...shaded,regions:[{...shaded.regions[0],lower:'x^3',upper:'0'}]}));
+assert.throws(()=>desmosExpressions({...shaded,regions:[{...shaded.regions[0],x_max:4}]}));
+console.log('PASS: Desmos shading expressions, interval bounds and rejected inverted regions.');
