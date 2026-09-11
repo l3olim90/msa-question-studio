@@ -7,4 +7,4 @@ export const reviewSchema=z.object({passed:z.boolean(),issues:z.array(z.string()
 export type Brief=z.infer<typeof briefSchema>;export type Draft=z.infer<typeof draftSchema>;
 export function jsonSchema(schema:z.ZodType){const result=z.toJSONSchema(schema);delete result.$schema;return result;}
 
-export const feasibilitySchema=z.object({feasible:z.boolean(),minimum_marks:z.number().int().min(1),reason:z.string().min(1).max(2000),suggested_allocation:z.array(z.object({criterion:z.string().min(1).max(500),marks:z.number().int().min(1)})).min(1).max(55)});
+export const feasibilitySchema=z.object({selected_subtopics:z.array(z.string()).min(1).max(55),total_marks:z.number().int().min(1),omitted_subtopics:z.array(z.object({id:z.string(),reason:z.string().min(1).max(1000)})).max(55),marks_reason:z.string().max(2000),specification_adjustments:z.array(z.string().min(1).max(1000)).max(12),resolved_specifications:z.string().max(3000)});
