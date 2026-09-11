@@ -104,3 +104,5 @@ const graphXml=strFromU8(unzipSync(graphWord)['word/document.xml']);
 assert(graphXml.includes('<wpg:wgp>'));assert(graphXml.includes('<a:cubicBezTo>'));assert(graphXml.includes('<wps:txbx>'));assert(graphXml.includes('<wp:anchor'));assert(graphXml.includes('locked="0"'));assert(!graphXml.includes('<pic:pic>'));assert(!Object.keys(unzipSync(graphWord)).some(k=>k.startsWith('word/media/')));
 fs.writeFileSync('test-output/native-vector-export.docx',graphWord);
 console.log('PASS: native grouped Word shapes, cubic geometry, editable text and unlocked floating group; no raster or SVG picture dependency.');
+
+const crops=JSON.parse(fs.readFileSync("data/reference-crops.json","utf8"));for(const q of snapshot.questions){assert(crops[q.question_id]?.length);for(const c of crops[q.question_id])assert(fs.existsSync("public"+c.url));}
