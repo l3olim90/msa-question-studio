@@ -1,0 +1,8 @@
+import {z} from 'zod';
+export const briefSchema=z.object({module:z.literal('EM1'),topic:z.string().max(60),subtopic:z.string().max(60),difficulty:z.enum(['Basic','Intermediate','Challenging']),specifications:z.string().max(3000).default('')});
+const mark=z.object({part:z.string(),criterion:z.string(),marks:z.number().positive().max(100)});
+const shape=z.object({type:z.enum(['line','arrow','rect','ellipse','polyline','text']),x:z.number().min(0).max(800),y:z.number().min(0).max(500),x2:z.number().min(0).max(800),y2:z.number().min(0).max(500),width:z.number().min(0).max(800),height:z.number().min(0).max(500),text:z.string().max(150),points:z.array(z.object({x:z.number().min(0).max(800),y:z.number().min(0).max(500)})).max(100),color:z.enum(['#14233b','#174bc7','#15748d','#999999']),fill:z.enum(['none','#ffffff','#dbeafe','#d1f0ed'])});
+export const draftSchema=z.object({title:z.string().min(1).max(150),question:z.string().min(10).max(12000),total_marks:z.number().positive().max(100),solutions:z.array(z.object({title:z.string().max(100),content:z.string().min(10).max(16000),marking:z.array(mark).min(1).max(40)})).min(1).max(4),syllabus_ids:z.array(z.string()).min(1).max(15),scope_explanation:z.string().max(2000),difficulty_explanation:z.string().max(2000),diagrams:z.array(z.object({caption:z.string().max(250),placement:z.enum(['question','solution']),shapes:z.array(shape).min(1).max(80)})).max(3)});
+export const reviewSchema=z.object({passed:z.boolean(),issues:z.array(z.string()).max(12),summary:z.string().max(2000)});
+export type Brief=z.infer<typeof briefSchema>;export type Draft=z.infer<typeof draftSchema>;
+export function jsonSchema(schema:z.ZodType){const result=z.toJSONSchema(schema);delete result.$schema;return result;}

@@ -1,0 +1,1 @@
+export function mathParts(text:string){return [...text.matchAll(/(?<!\\)\$((?:\\\$|[^$])+)\$|\\\[([\s\S]*?)\\\]|\\\(([\s\S]*?)\\\)/g)].map(m=>({raw:m[0],latex:m[1]??m[2]??m[3],index:m.index!,display:!!m[2]}));}
