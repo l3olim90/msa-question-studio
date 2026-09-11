@@ -140,3 +140,29 @@ const spaced=layoutLabels([{...shape,type:'text',x:200,y:180,text:'Upper measure
 for(let i=0;i<spaced.length;i++)for(let j=i+1;j<spaced.length;j++){const a=spaced[i],b=spaced[j],am=labelMetrics(a),bm=labelMetrics(b);assert(a.x+am.width<=b.x||b.x+bm.width<=a.x||a.y+am.height<=b.y||b.y+bm.height<=a.y);}
 assert.deepEqual(layoutLabels(spaced),spaced);
 console.log('PASS: overlapping text labels are separated without testing shape-edge collisions.');
+
+// A failed structured repair gets one bounded re-authoring attempt; never bypass review.
+for(const succeeds of [true,false]){
+ let authored=0,reviewed=0;
+ globalThis.fetch=async(_u:any,init:any)=>{
+  const req=JSON.parse(init.body);let value:any;
+  if(req.text.format.name==='marks_feasibility')value=feasible;
+  else if(req.text.format.name==='review'){
+   reviewed++;const passed=succeeds&&reviewed===3;
+   assert(req.instructions.includes('one calculation step'));
+   value={passed,scope_passed:true,format_passed:passed,issues:passed?[]:['Part (a) requests the order of L and entries l_23 and l_31. Part (b) requests k and S. Remove matrix profile terminology.'],summary:'Compound-target fixture.'};
+  }else{
+   authored++;assert(req.instructions.includes('fixed part count'));
+   if(authored===2)assert(req.instructions.includes('not merely replace conjunctions'));
+   if(authored===3)assert(req.instructions.includes('Re-author the question'));
+   value=d;
+  }
+  return Response.json({output:[{type:'message',content:[{type:'output_text',text:JSON.stringify(value)}]}]});
+ };
+ try{
+  if(succeeds)assert((await generate('test-key',brief)).review.passed);
+  else await assert.rejects(()=>generate('test-key',brief),/module-scope/);
+  assert.equal(authored,3);assert.equal(reviewed,3);
+ }finally{globalThis.fetch=oldFetch;}
+}
+console.log('PASS: structured compound-target repair, bounded re-authoring and rejection after failed review.');
