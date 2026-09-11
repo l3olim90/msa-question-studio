@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'EM1 Question Studio',
+  title: 'MSA Question Studio',
 };
 
 export default function RootLayout({

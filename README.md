@@ -1,4 +1,4 @@
-# EM1 Question Studio
+# MSA Question Studio
 
 A web interface and server-side retrieval/generation workflow built from the verified EM1 question bank. Difficulty labels are Basic, Intermediate and Challenging.
 
@@ -51,3 +51,14 @@ Live generation has not been exercised. Provider routing, Anthropic image/tool c
 Azure course configurations: enter the resource endpoint and chat deployment name. All Azure requests use Responses v1, supporting High reasoning with function tools; dated API versions from older clients are ignored. Embedding deployment settings are not needed for the current metadata/lexical retriever. All providers use manual redirects and reject 3xx responses without forwarding credentials. Regression tests cover Azure Responses routing with legacy settings and Claude finalization after tool-budget exhaustion or repeated failed calculations.
 
 Alpha-feedback validation: tests cover empty/duplicate/cross-topic selections, all active sub-topics, integer marks including 1, exact-total enforcement, multi-selection generation, and automatic scope reduction, justified mark changes, and a reconsideration restoring exact marks. Provider responses are mocked.
+
+
+## Question formats and alpha refinements
+
+The studio header uses MSA branding while the active module remains EM1. A session-independent light/dark preference is stored locally; credentials are still held only in memory. Choose Structured or MCQ. Structured supports optional creative context, exactly 2-26 individually answerable parts, difficulty and integer marks. MCQ is conceptual, uses four options with one correct answer, and is always Intermediate or above with a single 2-or-0 award. MCQ controls hide difficulty, marks and multiple parts; server normalization also enforces the fixed settings.
+
+Generated parts and options are separate structured fields rendered in both preview and Word. Prompts and independent review require source/notes terminology, in-module methods only, one answer target per part, misconception-based MCQ distractors and source-calibrated Basic difficulty. A same-topic Basic written example is included when available. Scope or format review failures trigger one repair and review; unresolved failures withhold the draft. Automated checks do not guarantee every model judgement is correct.
+
+Reference cards show available row marks or explicitly labelled parent totals when row allocations are unstated. `scripts/render_references.py` renders all 28 original question-paper pages, linked from every bank record. Screenshots preserve neighbouring questions and original errata; they are display references, while verified source text and relevant diagrams ground the model. Source marking JSON remains in the retrieval prompt but is removed from reference-card display.
+
+Refinement is directly below the draft heading. Export Word is prominent and exports Times New Roman 11 pt, including headings and OMML runs. MCQ options and all-or-nothing scoring are exported without step-mark distribution. Native Word checks confirmed Times New Roman 11 pt and editable equation objects for MCQ and Structured fixtures; PDFs rendered by Word were visually inspected because LibreOffice is unavailable. Regression tests use mock provider responses, including scope repair and rejection, MCQ normalization, exact part counts and source assets. Live provider generation and browser interaction have not been tested in this update.
