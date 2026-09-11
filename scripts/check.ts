@@ -149,11 +149,15 @@ for(const succeeds of [true,false]){
   if(req.text.format.name==='marks_feasibility')value=feasible;
   else if(req.text.format.name==='review'){
    reviewed++;const passed=succeeds&&reviewed===3;
-   assert(req.instructions.includes('one calculation step'));
+   assert(req.instructions.includes('not necessarily one answer target'));
+   assert(req.instructions.includes('form a matrix and state its order and specified entries'));
+   assert(req.instructions.includes('advisory, not grounds for rejection'));
+   assert(req.instructions.includes('must be explicitly requested'));
+   assert(!req.instructions.includes('only ONE answer target'));
    value={passed,scope_passed:true,format_passed:passed,issues:passed?[]:['Part (a) requests the order of L and entries l_23 and l_31. Part (b) requests k and S. Remove matrix profile terminology.'],summary:'Compound-target fixture.'};
   }else{
    authored++;assert(req.instructions.includes('fixed part count'));
-   if(authored===2)assert(req.instructions.includes('not merely replace conjunctions'));
+   if(authored===2)assert(req.instructions.includes('Keep closely related outputs together'));
    if(authored===3)assert(req.instructions.includes('Re-author the question'));
    value=d;
   }
@@ -166,3 +170,5 @@ for(const succeeds of [true,false]){
  }finally{globalThis.fetch=oldFetch;}
 }
 console.log('PASS: structured compound-target repair, bounded re-authoring and rejection after failed review.');
+
+console.log('PASS: shared authoring/review policy permits related matrix outputs and proportionate introductory Basic tasks.');
