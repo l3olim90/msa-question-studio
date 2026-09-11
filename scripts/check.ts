@@ -90,7 +90,7 @@ globalThis.fetch=async(_u:any,init:any)=>{const req=JSON.parse(init.body);let va
 try{const batch=await generateMcqCandidates('test-key',{...brief,questionType:'MCQ',subtopics:[]});assert.equal(batch.candidates.length,3);assert.equal(new Set(batch.candidates.map(c=>c.draft.question)).size,3);assert(batch.candidates.every(c=>c.review.passed&&c.draft.total_marks===2));assert.equal(batchAuthored,5);assert.deepEqual(contexts.map(c=>c.index),[1,1,2,3]);assert.equal(contexts[2].prior.length,1);}finally{globalThis.fetch=oldFetch;}
 console.log('PASS: main-topic three-MCQ batches, per-candidate reviews and duplicate replacement.');
 
-const graph={regions:[],x_min:-3,x_max:3,y_min:-2,y_max:10,x_label:'x',y_label:'y',curves:[{expression:'x^2',domain_min:-3,domain_max:3,color:'#174bc7' as const}],points:[{x:0,y:0,label:'O'}]};
+const graph={segments:[],labels:[],regions:[],x_min:-3,x_max:3,y_min:-2,y_max:10,x_label:'x',y_label:'y',curves:[{expression:'x^2',domain_min:-3,domain_max:3,color:'#174bc7' as const}],points:[{x:0,y:0,label:'O'}]};
 const graphShapes=renderGraphShapes(graph);assert(graphShapes.some(s=>s.type==='curve'));assert(!graphShapes.some(s=>s.type==='polyline'));const axes=graphShapes.filter(s=>s.type==='arrow');assert.equal(axes.length,2);assert(axes[0].x2>axes[0].x&&axes[0].y===axes[0].y2);assert(axes[1].y2<axes[1].y&&axes[1].x===axes[1].x2);assert(graphShapes.some(s=>s.type==='text'&&s.text==='x'));assert(graphShapes.some(s=>s.type==='text'&&s.text==='y'));
 assert.throws(()=>renderGraphShapes({...graph,curves:[{...graph.curves[0],expression:'import("fs")'}]}));
 const graphSvg=svgDiagram({caption:'Smooth parabola',placement:'question',graph,shapes:graphShapes});assert(graphSvg.includes('<path d="M '));assert(graphSvg.includes('C '));assert(!graphSvg.includes('<polyline'));assert(!graphSvg.includes('marker-start'));fs.writeFileSync('test-output/smooth-graph.svg',graphSvg);
@@ -118,3 +118,7 @@ const shadedExpressions=desmosExpressions(shaded);assert(shadedExpressions[0].la
 assert.throws(()=>desmosExpressions({...shaded,regions:[{...shaded.regions[0],lower:'x^3',upper:'0'}]}));
 assert.throws(()=>desmosExpressions({...shaded,regions:[{...shaded.regions[0],x_max:4}]}));
 console.log('PASS: Desmos shading expressions, interval bounds and rejected inverted regions.');
+
+const annotated=desmosExpressions({...graph,segments:[{x1:1,y1:0,x2:1,y2:2,style:'dashed',color:'#14233b'}],labels:[{x:1.2,y:3,text:'`y=x^2+1`'}]});
+assert(annotated.some(e=>e.lineStyle==='DASHED'&&e.latex==='(1+(0)t,0+(2)t)'&&e.parametricDomain?.max==='1'));assert(annotated.some(e=>e.showLabel&&e.label==='`y=x^2+1`'&&e.pointOpacity===0));
+console.log('PASS: bounded dashed divider and visible curve equation label.');
