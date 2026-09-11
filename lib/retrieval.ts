@@ -20,3 +20,10 @@ export function retrieve(raw:unknown){
 }
 export function references(context:ReturnType<typeof retrieve>){return context.examples.map(q=>({id:q.question_id,label:`${q.paper_type} AY${q.academic_year} S${q.semester} · ${q.source_question}`,question:q.question,solution:q.solution,alternatives:[q.alternative_solution_1,q.alternative_solution_2,q.alternative_solution_3].filter(Boolean),difficulty:q.perceived_difficulty,totalMarks:q.question_marks||null,parentMarks:q.parent_question_marks||null,screenshots:q.question_pages_json.map(page=>({page,url:`/source-pages/${q.paper_id}-p${page}.png`})),marking:q.marking_scheme_json,alternativeMarking:[q.alternative_marking_scheme_1_json,q.alternative_marking_scheme_2_json,q.alternative_marking_scheme_3_json],images:[...q.images_json,...q.solution_images_json].map(name=>({name,url:context.images[name]})),match:context.brief.subtopics.some(id=>q.subtopic_id===id||(q.additional_subtopic_ids_json as string[]).includes(id))?'Exact sub-topic':'Related topic'}));}
 
+
+// MCQ users choose a main topic; hidden or stale sub-topic selections cannot narrow it.
+export function topicWideMcqBrief(raw:unknown){
+ if(!raw||typeof raw!=='object')throw new Error('Choose a module and main topic.');
+ const value=raw as Record<string,unknown>;
+ return briefSchema.parse({...value,questionType:'MCQ',subtopics:bank.topics.filter(t=>t.status==='Active'&&t.module_id===value.module&&t.parent_id===value.topic).map(t=>t.taxonomy_id)});
+}

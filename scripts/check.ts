@@ -1,5 +1,6 @@
+import {generateMcqCandidates} from '../lib/candidates';
 import assert from 'node:assert/strict';import fs from 'node:fs';
-import {retrieve,references} from '../lib/retrieval';import {calculate} from '../lib/calculator';import {generate,validateDraft,validatePlan} from '../lib/generation';import {wordDocument,equation} from '../lib/word';import {svgDiagram} from '../lib/diagram';import {unzipSync,strFromU8} from 'fflate';
+import {retrieve,references,topicWideMcqBrief} from '../lib/retrieval';import {calculate} from '../lib/calculator';import {generate,validateDraft,validatePlan} from '../lib/generation';import {wordDocument,equation} from '../lib/word';import {svgDiagram} from '../lib/diagram';import {unzipSync,strFromU8} from 'fflate';
 const brief={module:'EM1',topic:'EM1-2',subtopics:['EM1-2.3'],totalMarks:4,difficulty:'Intermediate',specifications:'Use rectangular complex numbers.'};
 const ctx=retrieve(brief);assert(ctx.examples.length>0);assert(ctx.examples.every(q=>q.retrieval_status==='Eligible'));assert.throws(()=>retrieve({...brief,subtopics:['EM1-3.9H']}));assert.throws(()=>retrieve({...brief,difficulty:'Hard'}));assert.equal(calculate('det([[1,2],[3,4]])'),'-2');assert.equal(calculate('conj(4+2i)'),'4 - 2i');assert.throws(()=>calculate('import("fs")'));assert.throws(()=>calculate('a=3'));
 for(const invalid of [0,-1,1.5,'4',null])assert.throws(()=>retrieve({...brief,totalMarks:invalid}));
@@ -73,3 +74,16 @@ for(const q of snapshot.questions)for(const page of q.question_pages_json)assert
 const basic=retrieve({...brief,difficulty:'Basic'});assert(basic.examples.some(q=>q.perceived_difficulty==='Basic'&&q.question_type==='Written'));
 assert(mcqContext.examples.some(q=>q.question_type==='MCQ'));
 console.log('PASS: every source screenshot exists; Basic and MCQ benchmark retrieval.');
+
+// Main-topic MCQ batches ignore stale hidden sub-topic selections and produce three reviewed candidates.
+const wide=topicWideMcqBrief({...brief,questionType:'MCQ',subtopics:['invalid-hidden-id']});assert.deepEqual(new Set(wide.subtopics),new Set(allIds));
+let batchAuthored=0;const contexts:{index:number;prior:any[]}[]=[];
+globalThis.fetch=async(_u:any,init:any)=>{const req=JSON.parse(init.body);let value:any;
+ if(req.text.format.name==='marks_feasibility'){
+  const supplied=JSON.parse(req.input[0].content[0].text);assert.deepEqual(new Set(supplied.brief.subtopics),new Set(allIds));contexts.push(supplied.candidate_context);
+  value={...feasible,total_marks:2,omitted_subtopics:allIds.filter(id=>!brief.subtopics.includes(id)).map(id=>({id,reason:'A different suitable concept is selected for this candidate.'}))};
+ }else if(req.text.format.name==='review')value={passed:true,scope_passed:true,format_passed:true,issues:[],summary:'Candidate fixture review.'};
+ else{batchAuthored++;value={...mcq,question:batchAuthored<=2?mcq.question:`Distinct conceptual fixture ${batchAuthored}: ${mcq.question}`};}
+ return Response.json({output:[{type:'message',content:[{type:'output_text',text:JSON.stringify(value)}]}]});};
+try{const batch=await generateMcqCandidates('test-key',{...brief,questionType:'MCQ',subtopics:[]});assert.equal(batch.candidates.length,3);assert.equal(new Set(batch.candidates.map(c=>c.draft.question)).size,3);assert(batch.candidates.every(c=>c.review.passed&&c.draft.total_marks===2));assert.equal(batchAuthored,4);assert.deepEqual(contexts.map(c=>c.index),[1,2,2,3]);assert.equal(contexts[2].prior.length,2);}finally{globalThis.fetch=oldFetch;}
+console.log('PASS: main-topic three-MCQ batches, per-candidate reviews and duplicate replacement.');

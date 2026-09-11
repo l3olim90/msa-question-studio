@@ -1,2 +1,2 @@
-import {retrieve,references} from '@/lib/retrieval';
-export async function POST(request:Request){try{const ctx=retrieve(await request.json());return Response.json({references:references(ctx),exactExamples:ctx.exactCount},{headers:{'Cache-Control':'no-store'}});}catch(e){return Response.json({error:(e as Error).message},{status:400});}}
+import {retrieve,references,topicWideMcqBrief} from '@/lib/retrieval';
+export async function POST(request:Request){try{const raw:any=await request.json();const ctx=retrieve(raw?.questionType==='MCQ'?topicWideMcqBrief(raw):raw);return Response.json({references:references(ctx),exactExamples:ctx.exactCount},{headers:{'Cache-Control':'no-store'}});}catch(e){return Response.json({error:(e as Error).message},{status:400});}}
