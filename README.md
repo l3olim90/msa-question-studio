@@ -1,5 +1,7 @@
 # MSA Question Studio
 
+See the [technical documentation](DOCUMENTATION.md) for the architecture, backend workflow, guardrails, tests and extension options.
+
 Generate syllabus-grounded questions from verified EXAM/MST examples, review solutions, refine questions and export editable Word documents. EM1 is included; the import workflow supports additional modules such as EM2.
 
 ## Preview the inputs and outputs
