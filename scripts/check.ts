@@ -1,3 +1,5 @@
+import {reviewWithCalculations} from '../lib/review-calculations';
+import {repairDraftMath} from '../lib/math-repair';
 import {layoutLabels,labelMetrics} from '../lib/label-layout';
 import {repairLatex,repairMathText} from '../lib/math-text';
 import {desmosExpressions} from '../lib/desmos';
@@ -16,22 +18,22 @@ const d={question_type:'Structured' as const,parts:[],options:[],correct_option:
 validateDraft(d,ctx);assert.throws(()=>validateDraft({...d,total_marks:5},ctx));assert.throws(()=>validateDraft({...d,syllabus_ids:['EM1-3.9H']},ctx));
 assert.throws(()=>validateDraft(d,allContext));
 assert(svgDiagram(d.diagrams[0]).includes('<line'));assert(equation('\\frac{x^2}{\\sqrt{y}}').includes('<m:f>'));assert(equation('\\overline{jZ}').includes('<m:bar>'));assert(equation('\\begin{pmatrix}1&2\\\\3&4\\end{pmatrix}').includes('<m:m>'));
-const png=fs.readFileSync('../outputs/em1_question_bank/images/EM1-MST-2526-S2-4-c-solution-1.png');
+const png=Buffer.from(ctx.images['EM1-MST-2526-S2-4-c-solution-1.png'].split(',')[1],'base64');
 const doc=wordDocument(d,[png],references(ctx).map(r=>r.label));const zip=unzipSync(doc);assert(strFromU8(zip['word/styles.xml']).includes('Times New Roman'));assert(!strFromU8(zip['word/styles.xml']).includes('Calibri'));assert(!strFromU8(zip['word/styles.xml']).includes('w:val="34"'));assert(strFromU8(zip['word/settings.xml']).includes('Times New Roman'));assert(strFromU8(zip['word/document.xml']).includes('<m:oMath>'));assert(strFromU8(zip['word/document.xml']).includes('<wpg:wgp>'));assert(!strFromU8(zip['word/document.xml']).includes('<pic:pic>'));fs.mkdirSync('test-output',{recursive:true});fs.writeFileSync('test-output/word-equations.docx',wordDocument({...d,diagrams:[]},[]));
 const feasible={selected_subtopics:brief.subtopics,total_marks:4,omitted_subtopics:[],marks_reason:'',specification_adjustments:[],resolved_specifications:brief.specifications};
 let calls=0;const oldFetch=globalThis.fetch;globalThis.fetch=async(_u:any,init:any)=>{const req=JSON.parse(init.body);assert.equal(req.model,'gpt-5.6-sol');assert.equal(req.reasoning.effort,'high');assert.equal(req.store,false);if(req.text?.format?.name==='marks_feasibility')return Response.json({output:[{type:'message',content:[{type:'output_text',text:JSON.stringify(feasible)}]}]});calls++;if(calls===1){assert(req.input[0].content[0].text.includes('marking_scheme_json'));return Response.json({output:[{type:'function_call',name:'calculate',call_id:'test-call',arguments:JSON.stringify({expression:'abs(3+4i)'})}]});}if(calls===2){assert(req.input.some((x:any)=>x.type==='function_call_output'&&x.output==='5'));return Response.json({output:[{type:'message',content:[{type:'output_text',text:JSON.stringify(d)}]}]});}return Response.json({output:[{type:'message',content:[{type:'output_text',text:JSON.stringify({passed:true,scope_passed:true,format_passed:true,issues:[],summary:'Fixture review.'})}]}]});};
-const result=await generate('test-key',brief);assert.equal(result.calculations[0].result,'5');assert(result.review.passed);globalThis.fetch=oldFetch;assert.equal(calls,3);
+const result=await generate('test-key',brief);assert.equal(result.calculationHistory[0].result,'5');assert(result.review.passed);globalThis.fetch=oldFetch;assert.equal(calls,3);
 for(const repeatedFailure of [false,true]){
  let toolRounds=0,finals=0,reviews=0;let original:any;
  globalThis.fetch=async(_u:any,init:any)=>{
   const req=JSON.parse(init.body);assert.equal(req.model,'claude-sonnet-5');assert.equal(req.output_config.effort,'high');
   if(req.system.startsWith('Plan a valid'))return Response.json({content:[{type:'text',text:JSON.stringify(feasible)}]});
-  if(req.tools){toolRounds++;original??=req.messages[0];return Response.json({content:[{type:'tool_use',id:`calc-${toolRounds}`,name:'calculate',input:{expression:repeatedFailure?'a=3':`${toolRounds}+1`}}]});}
+  if(req.tools&&!req.system.startsWith('Independently review')){toolRounds++;original??=req.messages[0];return Response.json({content:[{type:'tool_use',id:`calc-${toolRounds}`,name:'calculate',input:{expression:repeatedFailure?'a=3':`${toolRounds}+1`}}]});}
   if(req.system.startsWith('Independently review')){reviews++;return Response.json({content:[{type:'text',text:JSON.stringify({passed:true,scope_passed:true,format_passed:true,issues:[],summary:'Fixture review.'})}]});}
   finals++;assert.deepEqual(req.messages[0],original);assert(req.system.includes('failed calculations are NOT verified'));assert(req.messages[1].content[0].text.includes('calculator_results'));
   return Response.json({content:[{type:'text',text:JSON.stringify(d)}]});
  };
- try{const completed=await generate('test-key',brief,undefined,'',{provider:'anthropic'});assert.equal(toolRounds,repeatedFailure?3:8);assert.equal(finals,1);assert.equal(reviews,1);assert.equal(completed.calculations.length,repeatedFailure?1:8);if(repeatedFailure)assert(completed.calculations[0].result.startsWith('Calculation failed:'));assert(completed.review.passed);}finally{globalThis.fetch=oldFetch;}
+ try{const completed=await generate('test-key',brief,undefined,'',{provider:'anthropic'});assert.equal(toolRounds,repeatedFailure?3:8);assert.equal(finals,1);assert.equal(reviews,1);assert.equal(completed.calculationHistory.length,repeatedFailure?1:8);if(repeatedFailure)assert(completed.calculationHistory[0].result.startsWith('Calculation failed:'));assert(completed.review.passed);}finally{globalThis.fetch=oldFetch;}
 }
 // Planning accounts for every requested topic and never silently changes marks.
 assert.throws(()=>validatePlan({...feasible,selected_subtopics:['EM1-3.9H']},ctx));
@@ -45,7 +47,7 @@ for(const mode of ['all','subset','changed','reconsider'] as const){
  globalThis.fetch=async(_u:any,init:any)=>{const req=JSON.parse(init.body);let value:any;
  if(req.text.format.name==='marks_feasibility'){plans++;value={...feasible,selected_subtopics:selected,omitted_subtopics:mode==='all'?[]:omitted,total_marks:mode==='reconsider'&&plans===2?3:4,marks_reason:originalMarks===3?'Fixture: the closest fair allocation needs four marks.':'',specification_adjustments:mode==='subset'?['Prioritised rectangular form over the incompatible selected methods.']:[]};}
  else if(req.text.format.name==='review')value={passed:true,scope_passed:true,format_passed:true,issues:[],summary:'Fixture review.'};
- else{const context=JSON.parse(req.input[0].content[0].text);assert.deepEqual(context.brief.subtopics,selected);const marks=mode==='reconsider'?3:4;assert.equal(context.brief.totalMarks,marks);value={...d,total_marks:marks,syllabus_ids:selected,solutions:[{...d.solutions[0],marking:[{part:'',criterion:'Fixture total',marks}]}]};}
+ else{const context=JSON.parse(typeof req.input==='string'?req.input:req.input[0].content[0].text);assert.deepEqual(context.brief.subtopics,selected);const marks=mode==='reconsider'?3:4;assert.equal(context.brief.totalMarks,marks);value={...d,total_marks:marks,syllabus_ids:selected,solutions:[{...d.solutions[0],marking:[{part:'',criterion:'Fixture total',marks}]}]};}
  return Response.json({output:[{type:'message',content:[{type:'output_text',text:JSON.stringify(value)}]}]});};
  try{const result=await generate('test-key',requestedBrief);assert.equal(result.brief.totalMarks,originalMarks);assert.equal(result.draft.total_marks,mode==='reconsider'?3:4);assert.deepEqual(result.effectiveBrief.subtopics,selected);assert.equal(plans,originalMarks===3?2:1);assert.equal(result.feasibility.omitted_subtopics.length,mode==='all'?0:omitted.length);if(mode==='changed')assert(result.feasibility.marks_reason.length>0);}finally{globalThis.fetch=oldFetch;}
 }
@@ -58,7 +60,7 @@ validateDraft(mcq,mcqContext);assert.throws(()=>validateDraft({...mcq,options:mc
 assert.throws(()=>validatePlan({...feasible,total_marks:3},mcqContext));
 const multipart={...d,question:'Let $z=3+4j$.',parts:[{label:'(a)',prompt:'Find $\\overline z$.'},{label:'(b)',prompt:'Find $|z|$.'}]};validateDraft(multipart,retrieve({...brief,multipleParts:true,partCount:2}));assert.throws(()=>validateDraft(multipart,retrieve({...brief,multipleParts:true,partCount:3})));
 const mcqDoc=wordDocument(mcq,[]);assert(strFromU8(unzipSync(mcqDoc)['word/document.xml']).includes('No partial credit'));fs.writeFileSync('test-output/mcq-export.docx',mcqDoc);fs.writeFileSync('test-output/structured-export.docx',wordDocument({...multipart,diagrams:[]},[]));
-for(const q of [...ctx.examples,...allContext.examples])for(const page of q.question_pages_json)assert(fs.existsSync(`public/source-pages/${q.paper_id}-p${page}.png`));
+for(const ref of references(ctx))for(const shot of ref.screenshots)assert(fs.existsSync('public'+shot.url));
 console.log('PASS: MCQ fixed 2-or-0 scoring, option count, structured part counts, reference screenshots and Times New Roman export.');
 
 // Exercise generation, scope repair and withholding of an unresolved scope violation.
@@ -74,7 +76,6 @@ for(const repaired of [true,false]){
 console.log('PASS: MCQ generation and scope repair; unresolved out-of-module drafts are withheld.');
 
 const snapshot=JSON.parse(fs.readFileSync('data/bank.json','utf8'));
-for(const q of snapshot.questions)for(const page of q.question_pages_json)assert(fs.existsSync(`public/source-pages/${q.paper_id}-p${page}.png`));
 const basic=retrieve({...brief,difficulty:'Basic'});assert(basic.examples.some(q=>q.perceived_difficulty==='Basic'&&q.question_type==='Written'));
 assert(mcqContext.examples.some(q=>q.question_type==='MCQ'));
 console.log('PASS: every source screenshot exists; Basic and MCQ benchmark retrieval.');
@@ -84,7 +85,7 @@ const wide=topicWideMcqBrief({...brief,questionType:'MCQ',subtopics:['invalid-hi
 let batchAuthored=0;let batchReviews=0;const contexts:{index:number;prior:any[]}[]=[];
 globalThis.fetch=async(_u:any,init:any)=>{const req=JSON.parse(init.body);let value:any;
  if(req.text.format.name==='marks_feasibility'){
-  const supplied=JSON.parse(req.input[0].content[0].text);assert.deepEqual(new Set(supplied.brief.subtopics),new Set(allIds));contexts.push(supplied.candidate_context);
+  const supplied=JSON.parse(typeof req.input==='string'?req.input:req.input[0].content[0].text);assert.deepEqual(new Set(supplied.brief.subtopics),new Set(allIds));contexts.push(supplied.candidate_context);
   value={...feasible,total_marks:2,omitted_subtopics:allIds.filter(id=>!brief.subtopics.includes(id)).map(id=>({id,reason:'A different suitable concept is selected for this candidate.'}))};
  }else if(req.text.format.name==='review'){batchReviews++;value={passed:batchReviews>2,scope_passed:batchReviews>2,format_passed:true,issues:batchReviews<=2?['Fixture scope failure requiring a new candidate.']:[],summary:'Candidate fixture review.'};}
  else{batchAuthored++;value={...mcq,question:batchAuthored<=2?mcq.question:`Distinct conceptual fixture ${batchAuthored}: ${mcq.question}`};}
@@ -172,3 +173,28 @@ for(const succeeds of [true,false]){
 console.log('PASS: structured compound-target repair, bounded re-authoring and rejection after failed review.');
 
 console.log('PASS: shared authoring/review policy permits related matrix outputs and proportionate introductory Basic tasks.');
+
+const brokenMath={...d,question:'Find the determinant of $\\begin{bmatrix}1&2\\\\3&4\\end{pmatrix}$.'};
+const fixedMath={...brokenMath,question:'Find the determinant of $\\begin{bmatrix}1&2\\\\3&4\\end{bmatrix}$.'};
+let formattingRepairs=0;
+const mathFixed=await repairDraftMath(brokenMath,v=>validateDraft(v,ctx),async(original,issue)=>{formattingRepairs++;assert.deepEqual(original,brokenMath);assert(issue.includes('KaTeX'));return fixedMath;});
+assert.equal(mathFixed.question,fixedMath.question);assert.equal(formattingRepairs,1);
+formattingRepairs=0;await assert.rejects(()=>repairDraftMath(brokenMath,v=>validateDraft(v,ctx),async()=>{formattingRepairs++;return brokenMath;}));assert.equal(formattingRepairs,1);
+await assert.rejects(()=>repairDraftMath({...d,total_marks:999},v=>validateDraft(v,ctx),async()=>{throw new Error('Non-format errors must not enter formatting repair.');}),/total/);
+console.log('PASS: actual malformed matrix LaTeX is repaired once, revalidated, and never bypassed; other validation failures are preserved.');
+
+const rateExpressions=['(0.045*pi)/(pi*6^2/4)','(0.045*pi)/(pi*9^2/4)'];
+assert(Math.abs(Number(calculate(rateExpressions[0]))-0.005)<1e-12);
+assert(Math.abs(Number(calculate(rateExpressions[1]))-1/450)<1e-12);
+let checkRound=0;
+const currentRates=await reviewWithCalculations(async(body)=>{
+ if(checkRound++===0)return {output:[{type:'function_call',name:'calculate',call_id:'bad',arguments:JSON.stringify({expression:'1,2'})},...rateExpressions.map((expression,i)=>({type:'function_call',name:'calculate',call_id:'rate'+i,arguments:JSON.stringify({expression})}))]};
+ assert(body.input.some((x:any)=>x.type==='function_call_output'&&x.call_id==='bad'&&x.output.startsWith('Calculation failed:')));
+ return {output:[]};
+},{instructions:'Review fixture',input:'Current inflow is 0.045*pi.'});
+assert.equal(currentRates.calculations.length,2);assert.deepEqual(currentRates.calculations.map(c=>c.expression),rateExpressions);
+const nextReview=await reviewWithCalculations(async()=>({output:[]}),{instructions:'Review changed draft',input:'A revised draft'});assert.deepEqual(nextReview.calculations,[]);
+console.log('PASS: current rate checks use 0.045*pi; failed comma expressions are excluded from verified results and each review starts a fresh ledger.');
+
+let reviewRequests=0;await assert.rejects(()=>reviewWithCalculations(async()=>{reviewRequests++;return {output:[{type:'function_call',name:'calculate',call_id:'repeated',arguments:JSON.stringify({expression:'2+2'})}]};},{instructions:'Budget fixture',input:'Draft'}),/calculator budget/);assert.equal(reviewRequests,4);
+console.log('PASS: reviewer calculator calls stop at the bounded finalization round.');

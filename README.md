@@ -1,100 +1,161 @@
 # MSA Question Studio
 
-A web interface and server-side retrieval/generation workflow built from the verified EM1 question bank. Difficulty labels are Basic, Intermediate and Challenging.
+Generate syllabus-grounded questions from verified EXAM/MST examples, review solutions, refine questions and export editable Word documents. EM1 is included; the import workflow supports additional modules such as EM2.
 
-## Use
+## Run in VS Code
 
-Select module, topic, one or more sub-topics and difficulty, enter a whole-number total of at least 1 mark, enter any additional specifications, select your provider and enter its API key, then generate. OpenAI defaults to `gpt-5.6-sol` with High reasoning. Anthropic defaults to `claude-sonnet-5` with `output_config.effort: high` and adaptive thinking. Azure uses your deployment name with High reasoning; that deployment must support Responses, images, structured outputs and tools. API access and billing depend on the selected provider account. Azure requires its own resource key, HTTPS resource endpoint and deployment name. Keys are not interchangeable between providers. The key is held only in React memory and sent to this app's backend for each generation; it is not written to local storage, cookies, logs or a database. Closing/reloading the page clears it. OpenAI and Azure Responses requests use `store: false`. Provider data policies still apply. Switching providers clears the key field.
+Open **this `msa-question-studio` folder** containing `package.json`. The parent LADP folder, Codex and the old hosted site are not required. Install Node.js 22.13+ (Node 24 LTS recommended), then use the VS Code terminal:
 
-The sub-topic checklist includes All, selecting every active sub-topic within the current topic. Changing the topic resets the selection. A planning pass prioritises the exact requested marks, selecting a relevant nonempty subset when the full selection is too broad or conflicts with specifications. Every omitted sub-topic gets a reason. Only when exact marks are infeasible may the planner choose the nearest feasible integer total; every proposed marks change receives a second reconsideration pass. An error-style alert accompanies the generated question, showing omitted topics, changed specifications, requested versus actual marks, and why exact marks were not followed. Original and effective briefs are kept separately; edits reconsider the original request. These are AI assessments, not a mathematical guarantee of optimality.
+```powershell
+npm install -g pnpm@10.32.1
+pnpm install --frozen-lockfile
+Copy-Item .env.example .env
+```
 
-Preview the question and solutions, navigate alternative methods, inspect the retrieved references and proposed marks, then request edits. Edits reuse the draft's original brief, so changing the dropdowns does not silently change an existing draft. Each revision receives a fresh review. A failed automated review stays visible and does not masquerade as a passed check.
+Edit `.env` with one provider's settings. If it already exists, edit it instead of overwriting it. Then:
 
-Diagrams consist only of SVG lines, arrows, rectangles, ellipses, polylines and labels. Basic positions and labels can be edited in the app; download the SVG for full editing in a vector editor. Word export includes native Office Math (OMML) equations and native grouped DrawingML shapes, with editable labels and cubic curve points. In desktop Word, select the diagram and use Shape Format > Group > Ungroup. This is editable Word equation content, not MathType objects; conversion to MathType depends on the user's installed MathType tooling.
+```powershell
+pnpm dev
+```
 
-## Pipeline
+Open the URL printed in the terminal, normally **http://127.0.0.1:3000**. Keep the terminal running; Ctrl+C stops it. If PowerShell blocks `pnpm.ps1`, use `pnpm.cmd`. On macOS/Linux use `cp .env.example .env`. VS Code tasks are under **Terminal → Run Task**.
 
-1. Validate the active module/topic/sub-topic against the taxonomy.
-2. Exclude deprecated taxonomy IDs, inactive questions and records ineligible for retrieval. All additional tags must also be active.
-3. Rank eligible examples by exact sub-topic, difficulty and specification keywords; cover each selected sub-topic with a matching example where available, then fill a four-example baseline with distinct parent questions. Larger selections can retrieve more examples; related examples remain within the selected topic. The UI exposes the exact-match count. This is a deterministic metadata/lexical RAG baseline, without embeddings or a vector database; 128 records do not require external indexing.
-4. Attach all selected notes excerpts, active same-topic prerequisite headings, full questions, solutions, alternatives and marking JSON. Include all associated source diagrams as image inputs, labelled with their source IDs.
-5. Plan the closest feasible configuration with exact marks as the first priority, then generate strict structured JSON. The model can call a bounded mathjs calculator for arithmetic, complex numbers, determinants, inverses and derivatives. No arbitrary code execution is allowed. After eight tool rounds, 24 attempted calculations, or repeated requests, a final tool-free pass completes the draft with the original source context and calculator results. Failed calculations remain explicitly labelled in the log.
-6. Validate schema, active syllabus IDs, every marking total, and LaTeX parsing. Independently ask the model to review scope, mathematics, notation, diagram geometry and difficulty. Show the review and calculator log. These checks reduce errors; they are not a proof of mathematical correctness or a replacement for educator review.
-7. Export question, question diagrams, main solution and alternatives with proposed marking allocations. Include concise reference labels at the end.
+For the compiled app:
 
-Unknown source allocations are not filled with fabricated source marks. The LLM proposes new marking allocations, explicitly labelled as proposals. Examples alone are not the syllabus boundary: the supplied EM1 notes are included as an additional constraint. The notes excerpts are extracted by section page ranges and can overlap neighbouring sections; the selected sub-topic remains the prompt's explicit scope.
+```powershell
+pnpm build
+pnpm start
+```
 
-## Data and maintenance
+Restart after editing `.env`. Restart development or rebuild production after bank changes. Installation/build, provider generation and Desmos require internet access to their respective services.
 
-`data/bank.json` is an ingested snapshot of `../outputs/em1_question_bank/*.csv`, the diagram folder and `../EM1 Notes - ver17Mar26.pdf`. It includes the four user-approved revisions. `scripts/ingest.py` regenerates it after bank updates (requires Python and pypdf). Rebuild and deploy after ingestion. Source content is bundled server-side; the client receives only the taxonomy and selected reference records.
+## Configure a provider
 
-The current interface deliberately supports only EM1. Adding modules requires importing their taxonomy and bank, then extending the module schema and selector. Stable module/topic IDs and lifecycle fields are already present in the source bank.
+`AI_PROVIDER` selects the active group. Server credentials are used automatically; no UI key entry is required. There are no browser key/provider controls. Missing configuration produces a server-configuration error; edit .env and restart.
 
-## Development
+| Provider | Required settings | Model setting |
+| --- | --- | --- |
+| OpenAI | `AI_PROVIDER=openai`, `OPENAI_API_KEY` | `OPENAI_MODEL`, default `gpt-5.6-sol` |
+| Azure | `AI_PROVIDER=azure`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_CHAT_DEPLOYMENT_NAME` | Actual Azure deployment name |
+| Anthropic | `AI_PROVIDER=anthropic`, `ANTHROPIC_API_KEY` | `ANTHROPIC_MODEL`, default `claude-sonnet-5` |
 
-Use Node 22.13+ and pnpm. Run `pnpm install`, `pnpm dev` and `pnpm build`. On Windows ARM, the current workerd dependency requires an x64 Node runtime under Windows emulation. This checkout was tested that way. Do not copy runtime binaries into the published source.
+Default model names preserve the previous configuration; choose models available to your account with structured output, vision and tool support. Requests use high reasoning effort. Azure and standard OpenAI keys are not interchangeable. Paste the Azure endpoint as a plain HTTPS URL without Markdown syntax. Azure uses `/openai/v1/responses`; API-version and embedding deployment settings are not used.
 
-Backend code: `lib/retrieval.ts`, `lib/generation.ts`, `lib/calculator.ts`. Output contract: `lib/schema.ts`. Word conversion: `lib/word.ts`. UI: `app/workspace.tsx`.
+Set `DESMOS_API_KEY` for graphs and graph images in Word. It is a browser API key and is visible to the browser. Provider keys remain server-side. Never commit `.env` or put secrets in `VITE_` / `NEXT_PUBLIC_` variables.
 
-## Validation
+For shared use, set `APP_USERNAME` and a strong `APP_PASSWORD` and serve through an HTTPS reverse proxy. Default commands bind to localhost. Do not expose an unauthenticated server or use plain HTTP over a network. DOCUMENTATION.md explains the security limits.
 
-TypeScript checks and production build passed. Tests cover active scope filtering, retrieval, calculator restrictions, marking totals, SVG escaping/structure, native Word equation XML and mocked generation with a calculator call. A Word export was opened in Microsoft Word, its native equation objects counted, exported to PDF and visually inspected. The packaged LibreOffice renderer was unavailable, so Microsoft Word was used for that check.
+## Generate, refine and export
 
-Live generation has not been exercised. Provider routing, Anthropic image/tool continuity and High effort, and Azure endpoint restrictions and authentication were tested with mock credentials. No pasted user key was used. The first key-backed generation is still an integration check. Browser interaction testing was not requested. Optional WebMCP brief configuration is feature-detected; no supported WebMCP validation context was available, so it is not claimed as tested.
+1. Select an active module and main topic, then Structured or MCQ.
+2. Structured: choose sub-topics (All means within this topic), difficulty and marks. Defaults are Basic / 10 marks. Challenging sets 15 marks, editable afterward. Creative context and multiple parts are optional. Choose 2–6 parts or let the model decide.
+3. Add methods, context, diagram, rounding or part-mark requirements. Related outputs may share a part; unrelated problems should be separate.
+4. Generate. MCQ mode produces three conceptual candidates, four options each, one correct answer and fixed 2-or-0 scoring. Page through them with the arrows.
+5. Review source references, solutions and proposed marks. Solution arrows expose alternative methods.
+6. Describe changes in the refinement field below the generated heading and apply/recheck.
+7. Export with **Export Word**. Word uses Times New Roman 11 pt, editable equations and black 1.5 pt grouped vector diagrams. Measurement arrows have two heads. Desmos graphs export as images. Filenames are `module_type_topic_difficulty.docx` for Structured and `module_type_topic.docx` for MCQ.
 
-## Official API references
+Results are in memory: export before refreshing or closing. Review before assessment use. Automated checks do not guarantee correctness. Structured configuration adjustments explain omitted topics or changed marks; exact marks take priority. Failure messages begin **Question could not be generated.** Temporary service failures may retry once; unresolved material scope/math/format failures are not silently accepted.
 
-- [GPT-5.6 Sol](https://developers.openai.com/api/docs/models/gpt-5.6-sol)
-- [Responses API](https://developers.openai.com/api/reference/typescript/resources/responses/methods/create)
+## Import papers or add a module
 
+Imports are local administrative commands. Extraction sends the selected PDFs to the provider in `.env` and incurs provider charges. Use dated EXAM/MST pairs, not revision handouts. Install Python 3.11+ and:
 
-Azure course configurations: enter the resource endpoint and chat deployment name. All Azure requests use Responses v1, supporting High reasoning with function tools; dated API versions from older clients are ignored. Embedding deployment settings are not needed for the current metadata/lexical retriever. All providers use manual redirects and reject 3xx responses without forwarding credentials. Regression tests cover Azure Responses routing with legacy settings and Claude finalization after tool-budget exhaustion or repeated failed calculations.
+```powershell
+python -m pip install -r requirements-import.txt
+```
 
-Alpha-feedback validation: tests cover empty/duplicate/cross-topic selections, all active sub-topics, integer marks including 1, exact-total enforcement, multi-selection generation, and automatic scope reduction, justified mark changes, and a reconsideration restoring exact marks. Provider responses are mocked.
+If necessary, set `PYTHON` in `.env` to the executable containing those packages. Create this folder and copy `imports/templates/manifest.json` into it:
 
+```text
+imports/inbox/EM2-2026-batch1/
+  manifest.json
+  notes.pdf
+  exam.pdf
+  solutions.pdf
+```
 
-## Question formats and alpha refinements
+Example manifest:
 
-The studio header uses MSA branding while the active module remains EM1. A session-independent light/dark preference is stored locally; credentials are still held only in memory. Choose Structured or MCQ. Structured supports optional creative context, exactly 2-26 individually answerable parts, difficulty and integer marks. MCQ is conceptual, uses four options with one correct answer, and is always Intermediate or above with a single 2-or-0 award. MCQ controls hide difficulty, marks and multiple parts; server normalization also enforces the fixed settings.
+```json
+{
+  "batch": "EM2-2026-batch1",
+  "module": {"id": "EM2", "name": "Engineering Mathematics II", "notation": "Follow the supplied EM2 notes and notation."},
+  "notes": "notes.pdf",
+  "papers": [{"id": "EM2-EXAM-2526-S2", "kind": "EXAM", "academic_year": "2025/2026", "semester": "2", "question_pdf": "exam.pdf", "solution_pdf": "solutions.pdf"}]
+}
+```
 
-Generated parts and options are separate structured fields rendered in both preview and Word. Prompts and independent review require source/notes terminology, in-module methods only, one answer target per part, misconception-based MCQ distractors and source-calibrated Basic difficulty. A same-topic Basic written example is included when available. Scope or format review failures trigger one repair and review; unresolved failures withhold the draft. Automated checks do not guarantee every model judgement is correct.
+Paths are relative to the manifest. Add paper objects for additional pairs; IDs must be unique. To append EM1 samples, use its module metadata from `data/modules.json` and omit notes to reuse its taxonomy. A new module needs notes or a `taxonomy` path to JSON with a `topics` array matching DOCUMENTATION.md. Existing-module notes can propose taxonomy additions; review changes to existing IDs carefully.
 
-Reference cards show available row marks or explicitly labelled parent totals when row allocations are unstated. `scripts/render_references.py` renders all 28 original question-paper pages, linked from every bank record. Screenshots preserve neighbouring questions and original errata; they are display references, while verified source text and relevant diagrams ground the model. Source marking JSON remains in the retrieval prompt but is removed from reference-card display.
+```powershell
+pnpm bank extract imports/inbox/EM2-2026-batch1/manifest.json
+```
 
-Refinement is directly below the draft heading. Export Word is prominent and exports Times New Roman 11 pt, including headings and OMML runs. MCQ options and all-or-nothing scoring are exported without step-mark distribution. Native Word checks confirmed Times New Roman 11 pt and editable equation objects for MCQ and Structured fixtures; PDFs rendered by Word were visually inspected because LibreOffice is unavailable. Regression tests use mock provider responses, including scope repair and rejection, MCQ normalization, exact part counts and source assets. Live provider generation and browser interaction have not been tested in this update.
+Extraction creates `imports/staging/EM2-2026-batch1/` with rendered pages, `manifest.json`, `taxonomy.json` and `review.json`. It does **not** change the live bank. Pairs are limited to 40 pages total. Failed extraction leaves staged evidence; correct the cause and use a new batch ID, or deliberately remove the failed staging folder before retrying.
 
+### Verify every paper and solution set
 
-## Main-topic MCQ candidates
+Open original PDFs/rendered pages beside the staged JSON:
 
-MCQ mode hides sub-topic selection. The server expands the selected main topic to its active sub-topic pool, ignoring stale hidden selections. Each new generation returns three candidates; each chooses a suitable subset and receives its own source retrieval, calculations and review. Candidates are generated sequentially with earlier questions supplied to discourage repeated concepts; exact repeats or failed overall reviews receive one replacement attempt. A set is returned only when all three pass these checks. This requires more provider calls than generating one question.
+- Compare `expected_source_questions` with every printed question/part. This list is AI-generated, not proof of completeness. Correct it and add any missing records.
+- Check values, equations, options, instructions, marks, all solutions and marking JSON. JSON doubles LaTeX backslashes, e.g. `"$\\frac{1}{2}$"`.
+- Keep unrelated parts separate; retain shared stems and labels for linked parts.
+- Check taxonomy tags, difficulty and source metadata.
+- Check `question_crops`: normalized `[left, top, right, bottom]` coordinates in 0–1 page units. Retain needed shared context. Check solution pages and `has_diagram`.
+- Resolve every record's `issues`, set its `verified` to true and add `reviewer_notes`.
+- Verify each entire paper/solution pair, set its `verified` to true and add its `reviewer_notes`.
+- Review taxonomy, set `taxonomy_verified` to true and fill `taxonomy_reviewer_notes`.
 
-Previous/Next and numbered navigation switch the question, solution, references and adjustment information together. Refinement and Word export operate on the currently displayed candidate; editing one preserves the others. Automatic choice from the MCQ topic pool is not displayed as an omitted-user-selection error. Structured question controls and behaviour are unchanged. The empty-state copy and header icon are subject-neutral.
+Do not change flags without checking. Stop the server, promote and restart:
 
+```powershell
+pnpm bank commit EM2-2026-batch1
+pnpm bank validate
+pnpm dev
+```
 
-## Function graphs
+Promotion appends records, creates crops/image data, updates modules and backs up old JSON. New module/topic choices appear after restart; no UI edit is needed. Duplicate IDs are rejected. Run only one import at a time.
 
-Function graphs now use bounded mathjs evaluation of explicit y=f(x) expressions and emit cubic Bezier SVG paths, rather than polylines. Graph metadata includes numeric bounds, domains, axis labels and optional labelled points. The renderer fixes the layout to no grid and one arrowhead at the positive end of each axis, includes the origin, and separates discontinuities instead of connecting across asymptotes. Non-graph diagrams retain the existing editable shape system. The generated SVG is used by the preview and SVG download; Word export uses equivalent native grouped shapes; refine can change a function/domain, while external vector editors can edit the cubic control points.
+### Deprecation and corrections
 
-Community Desmos MCP implementations were found, but the user selected editable SVG rendering without a separate Desmos key/service. No Desmos integration or Desmos rendering is claimed. Tests cover cubic path output, quadratic interpolation accuracy, arrow directions, labels, rejected expressions and asymptote separation.
+```powershell
+pnpm bank status EM2-1.1 Deprecated
+pnpm bank status EM2-1.1 Active
+pnpm bank status EM2-EXAM-2526-S2-001 Deprecated
+```
 
-Native grouped Word export was opened in desktop Microsoft Word, ungrouped into ten individual shapes, recoloured and relabelled, saved and reopened successfully. Word PDF rendering was visually checked. Curve geometry uses native cubic Bezier nodes; no image conversion or SVG editor is required.
+Use actual IDs. Deprecated records remain for history but leave retrieval. Restart/rebuild afterward. Correct existing questions directly in `data/bank.json` using a reviewed Git diff and preserve IDs; do not duplicate papers to correct them. To undo an import, stop the server and restore all affected JSON files together from the printed `imports/backups/` folder or Git, then rebuild. Remove unused crop images only after checking the restored crop manifest.
 
-MCQ results never show the configuration-adjustment error panel. Hidden Structured part controls are omitted from MCQ model briefs; format enforcement is not reported as a configuration conflict. Structured adjustment explanations and actual request failures retain their existing handling.
+## Share on GitHub
 
-MCQ review uses the same normalized authoring brief as generation, distinguishes the main-topic pool from chosen coverage, and does not treat false in-syllabus distractors as scope violations. A scope/format failure after repair triggers the existing bounded candidate retry; provider errors still propagate. Exhausted review reports its concrete issues. Mock regression exercises failed repair followed by a successful replacement candidate; live provider reproduction was not performed.
+This folder is the active repository. Commit application code, required components, data, source-question crops, scripts/tests, docs, package/lock files and empty-key `.env.example`. Do not commit `.env`, dependencies, builds, import inbox/staging/backups or test-output; `.gitignore` covers them. Bank text and source crops are tracked because the app needs them.
 
-Reference images use question-specific original-PDF crops for every bank row, preserving shared stems for independently indexed parts. Rebuild with scripts/crop_references.py; data/reference-crops.json maps each row to its crop. MCQ creative context is hidden and normalized off. Word filenames follow module_type_topic[_difficulty].docx, with difficulty only for Structured.
+Review and commit with VS Code Source Control. Create an empty GitHub repository, then:
 
-Desmos API preview: function graphs load the official v1.11 browser calculator using the DESMOS_API_KEY runtime setting. The browser necessarily receives this browser-API key. Preview uses no grid, positive-axis arrows, labels, and pan/zoom. Word export captures a high-resolution PNG from Desmos at the original bounds; other diagrams retain native grouped shapes. Cubic expressions support y= and f(x)= prefixes and Unicode powers. The browser integration was checked against official API documentation; automated checks cover expression normalization and graph picture packaging, not a live Desmos browser session.
+```powershell
+git remote add origin https://github.com/YOUR-ACCOUNT/msa-question-studio.git
+git push -u origin main
+```
 
-Generation safely classifies non-JSON/HTML responses and makes at most one automatic fresh request for temporary transport/provider failures using the identical serialized brief and edit context. Authentication and ordinary validation failures are not retried. Exhausted generation failures have the bold heading Question could not be generated. Structured questions allow 2–6 parts, default 2, enforced in the UI and schema.
+If origin exists, inspect `git remote -v` and use `git remote set-url origin ...` for the intended repository. No GitHub repository has been created or pushed automatically. Collaborators clone and follow the setup instructions with their own `.env`.
 
-Desmos shaded areas use graph.regions with lower/upper functions and an x interval. They render as bounded inequalities in preview and Word screenshots. Numeric checks reject inverted, empty or invalid regions. Requested student-facing shading is checked directly and triggers the existing repair pass if absent. Authoring/review instructions align explicit area tasks and printed part marks with their rubrics. These checks reduce omissions but do not guarantee all model generations pass.
+## Layout and maintenance
 
-Graph annotations now support bounded solid/dashed/dotted segments and positioned equation/text labels via graph.segments and graph.labels. Desmos preview and Word image export share these expressions. Generation/review use these fields instead of ignored SVG shapes. Regression fixture covers the dashed segment from (1,0) to (1,2) and y=x^2+1 label.
+```text
+app/                     UI and server routes
+components/ui/           Only components used by the app
+lib/                     Retrieval, generation, providers, security, export
+data/                    Bank, module registry, screenshot manifest
+public/source-questions/ Required source crops
+imports/                 Templates and ignored local import folders
+scripts/                 Tests and PDF import tools
+.env.example             Empty configuration template
+README.md                User instructions
+DOCUMENTATION.md         Technical workflow, guardrails and extensions
+VALIDATION.md            Migration checks and limits
+```
 
-Choosing Challenging resets the marks field to 15, which remains editable. Structured multi-part mode offers Let AI decide (2–6), disabling the manual count; validation permits 2–6 generated parts in this mode and retains exact counts in manual mode. Vector schematic outlines are black, 2.25 pt in Word. Measurement primitives have two arrowheads; math labels export as native OMML equations within grouped text boxes. Desmos graph image export remains separate.
+Before sharing changes run `pnpm typecheck`, `pnpm test`, `pnpm bank validate` and `pnpm build`. Tests simulate providers and an isolated EM2 import without API charges. The import fixture needs Python dependencies.
 
-Known JSON-escape corruption in LaTeX (including form-feed plus rac from an incorrectly escaped fraction) is normalized before draft validation. Preview math parsing and Word equations share the same narrow repair logic. Valid prose/newlines are preserved. Other KaTeX parse failures return a readable generation error and use the bounded automatic retry.
-
-Vector outlines now use 1.5 pt (19050 EMU), with equivalent SVG thickness. Shared conservative text-box layout separates text labels, wraps prose, retains font size, and permits text-edge crossings. Generated diagrams, SVG preview and Word export use the same placements. Layout estimates cannot replace review of complex mathematical typography.
+Legacy course files, full-page reference copies, conversion scripts and the old app were retired outside this repository and are not required. Bulk deletion was blocked by the execution environment; archived/remnant folders in the parent workspace may still need manual deletion. Do not include them in GitHub. This migration leaves the previous hosted site unchanged.

@@ -1,0 +1,6 @@
+{
+  "batch": "EM2-2026-batch1",
+  "module": {"id": "EM2", "name": "Engineering Mathematics II", "notation": "Use the notation and methods from the supplied EM2 notes. Do not assume EM1 conventions."},
+  "notes": "notes.pdf",
+  "papers": [{"id": "EM2-EXAM-2526-S2", "kind": "EXAM", "academic_year": "2025/2026", "semester": "2", "question_pdf": "exam.pdf", "solution_pdf": "solutions.pdf"}]
+}

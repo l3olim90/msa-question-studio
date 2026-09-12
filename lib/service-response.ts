@@ -9,10 +9,10 @@ export async function readServiceJSON(response:Response,service:string):Promise<
  }
 }
 // A fresh request uses the identical serialized brief and edit context. At most one retry.
-export async function generationRequest(body:string,key:string,signal:AbortSignal,onRetry:()=>void){
+export async function generationRequest(body:string,signal:AbortSignal,onRetry:()=>void){
  for(let attempt=0;attempt<2;attempt++){
   try{
-   const response=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json','x-provider-key':key},body,signal});
+   const response=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body,signal});
    const data=await readServiceJSON(response,'The generation service');
    if(!response.ok)throw new ServiceResponseError(data.error||`Generation failed (HTTP ${response.status}).`,data.retryable===true||response.status>=500||response.status===429);
    return data;

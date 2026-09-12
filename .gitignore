@@ -41,3 +41,12 @@ next-env.d.ts
 /scripts/check.mjs
 *.tsbuildinfo
 /scripts/providers-check.mjs
+
+!.env.example
+/imports/inbox/*
+!/imports/inbox/.gitkeep
+/imports/staging/*
+!/imports/staging/.gitkeep
+/imports/backups/
+/scripts/*.mjs
+!scripts/run.mjs

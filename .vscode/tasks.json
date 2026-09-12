@@ -1,0 +1,9 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {"label": "Studio: develop", "type": "shell", "command": "pnpm dev", "isBackground": true, "problemMatcher": []},
+    {"label": "Studio: test", "type": "shell", "command": "pnpm test", "problemMatcher": []},
+    {"label": "Studio: build", "type": "shell", "command": "pnpm build", "group": "build", "problemMatcher": []},
+    {"label": "Studio: validate bank", "type": "shell", "command": "pnpm bank validate", "problemMatcher": []}
+  ]
+}
