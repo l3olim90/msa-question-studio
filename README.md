@@ -2,6 +2,15 @@
 
 Generate syllabus-grounded questions from verified EXAM/MST examples, review solutions, refine questions and export editable Word documents. EM1 is included; the import workflow supports additional modules such as EM2.
 
+## Preview the inputs and outputs
+
+You can explore these artefacts without configuring an API key or running the app:
+
+- **[Generated Word samples](examples/generated-questions/)** — nine exports produced by the app, covering MCQ and Structured questions at Basic and Challenging levels. Open them in Word to see the exported question and solution presentation. For a starting point, try the [Matrices and Determinants MCQ](<examples/generated-questions/EM1_MCQ_Matrices and Determinants.docx>) or the [Basic definite-integral question](<examples/generated-questions/EM1_Structured_Definite Integrals and Area Under a Curve_Basic.docx>). Files ending in `_1` are additional samples and have been retained separately.
+- **[EM1 question-bank workbook](examples/question-bank/EM1_question_bank.xlsx)** — the earlier Excel question bank, retained as a convenient preview of the source material and its organization.
+
+These are illustrative snapshots, not automated test fixtures or a guarantee of the latest output. The workbook may differ from the current bank. The app reads [data/bank.json](data/bank.json), [data/modules.json](data/modules.json) and [data/reference-crops.json](data/reference-crops.json); changing an example document or the workbook does not update the app. Use the import/update process below for data changes. GitHub may require downloading Office files to view them.
+
 ## Run in VS Code
 
 Open **this `msa-question-studio` folder** containing `package.json`. The parent LADP folder, Codex and the old hosted site are not required. Install Node.js 22.13+ (Node 24 LTS recommended), then use the VS Code terminal:
@@ -131,6 +140,8 @@ Use actual IDs. Deprecated records remain for history but leave retrieval. Resta
 
 This folder is the active repository. Commit application code, required components, data, source-question crops, scripts/tests, docs, package/lock files and empty-key `.env.example`. Do not commit `.env`, dependencies, builds, import inbox/staging/backups or test-output; `.gitignore` covers them. Bank text and source crops are tracked because the app needs them.
 
+Include `examples/` when sharing the repository so readers can preview the workbook and Word exports before running the app. These files are documentation assets and are not required at runtime.
+
 Review and commit with VS Code Source Control. Create an empty GitHub repository, then:
 
 ```powershell
@@ -147,6 +158,7 @@ app/                     UI and server routes
 components/ui/           Only components used by the app
 lib/                     Retrieval, generation, providers, security, export
 data/                    Bank, module registry, screenshot manifest
+examples/                Sample Word exports and historical Excel bank preview
 public/source-questions/ Required source crops
 imports/                 Templates and ignored local import folders
 scripts/                 Tests and PDF import tools
