@@ -1,5 +1,7 @@
 # MSA Question Studio: technical documentation
 
+Version: 2026-09-16
+
 ## Architecture
 
 This is a React 19 / TypeScript application using Vinext (the Next.js-compatible Vite runtime). The migration targets a **Node.js server**, not the original Cloudflare Worker deployment. The existing hosted site is a separate, unchanged deployment. Local operation and GitHub sharing require no Codex or Sites account. Node's native environment-file support loads server settings; see [Node environment variables](https://nodejs.org/api/environment_variables.html) and [Vinext's Node runtime](https://github.com/cloudflare/vinext).
@@ -46,7 +48,29 @@ Before semantic review, a KaTeX parse failure now gets one targeted formatting r
 | `lib/security.ts`, `middleware.ts` | Basic authentication, HTTP guards, request bounds and response security headers. |
 | `lib/word.ts`, `lib/word-shapes.ts` | DOCX ZIP/OOXML, native OMML math and grouped DrawingML shapes. |
 
-Generation requests contain `{brief, previous?, edit?}`. Browser-supplied connections are rejected, and key headers are never used. Successful responses contain `draft`, `references`, `review`, `feasibility`, `calculations`, `brief` and `effectiveBrief`. New MCQ requests return `{candidates: [...]}`. The UI keeps results in memory; there is no server-side history database.
+Generation requests contain `{brief, previous?, edit?, sessionId?, questionId?}`. Session/question identifiers are validated correlation labels, not authentication identities. Browser-supplied connections are rejected, and key headers are never used. Successful responses contain `draft`, `references`, `review`, `feasibility`, `calculations`, `brief`, `effectiveBrief`, `promptVersion` and `promptHash`. New MCQ requests return `{candidates: [...]}`.
+
+### Session history
+
+`lib/history.ts` defines the versioned, validated browser history format under `sessionStorage` key `msa-question-history-v1`. A successful new generation appends a batch containing one Structured question or three individually selectable MCQs. Refinements and manual diagram edits replace the selected result in that batch without adding history entries. Failed and cancelled responses do not add entries. Selecting history restores the question, candidate group, solutions, references and review; the new-generation brief remains independent. Refresh restores the active question and candidate index. Loading validates saved data before rendering; malformed data starts an empty history with a warning.
+
+Storage is tab-scoped, not a server-side history database. Normal tab closure ends the session, although browser restore/duplicate-tab features can copy or restore session storage. It stores assessment/source content locally. If storage is blocked or exceeds browser quota, the app warns, retains the current in-memory history, and removes the older stored snapshot when possible so it is not mistaken for the latest state. Export important questions before closing. No provider credentials are stored in history.
+
+### Release and prompt versions
+
+The app header reads the release date from `lib/version.ts`; update it together with the dates in README and this document. `PROMPTS.md` has its own date and is the live prompt configuration, not a copy for reference. `lib/prompts.ts` loads and validates its named text blocks and computes a SHA-256 hash. Each question uses one prompt snapshot throughout generation and review; subsequent questions load current edits. For an MCQ batch, each candidate loads a snapshot. Deploy the Markdown file with the Node application in its working directory.
+
+The document contains the authoring and planning system prompts, shared Structured policy, review/repair instructions, calculator descriptions, finalization instructions and user-message configuration (`user_context`, inserted as `user_instructions` in the JSON message). Dynamic brief/specification/edit data, module notation from `data/modules.json`, retrieved references, tool/schema definitions and validation logic remain in code/data. Administrative bank-import prompts are separate in `scripts/bank.ts`. Keep IDs/fences intact, use plain UTF-8 text with normal LaTeX backslashes, and run the regression suite after prompt changes. Invalid configuration fails with a descriptive error instead of silently reverting to old prompts.
+
+### Langfuse audit trail and monitoring
+
+`lib/observability.ts` provides optional server-only tracing using Langfuse's [supported OTLP/HTTP JSON endpoint](https://langfuse.com/integrations/native/opentelemetry), `/api/public/otel/v1/traces`, with `x-langfuse-ingestion-version: 4`. It uses Node's `AsyncLocalStorage` to isolate concurrent requests and avoids introducing a global telemetry SDK/provider into Vinext. Enable with `LANGFUSE_ENABLED=true`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` and the project region's `LANGFUSE_BASE_URL`. HTTPS is required except for a local self-hosted instance. Credentials never reach the browser; redirects are not followed.
+
+One root trace covers an accepted generation/refinement request, including all MCQ candidates. Child generation spans cover planning, authoring/tool rounds, reviews and repairs. The trace records app release, operation, anonymous tab-session ID, question batch/index correlation, prompt date/hash, model/provider, start/end times, success/failure, question count, review outcome and independent calculation count. Every child inherits the correlation metadata. Provider-reported token usage is normalized, including cached input tokens, for Langfuse usage/cost analysis; cost availability depends on Langfuse recognizing the model or Azure deployment mapping. Rejected requests before generation (authentication, configuration, rate/capacity) are not traced. Export and manual browser edits are not server events.
+
+`LANGFUSE_CAPTURE_CONTENT=false` is the default: no user text, source content, generated answers or raw provider errors are exported. Opting in adds system/user prompt text and model outputs plus final drafts/briefs/reviews. Reference image bytes, hidden reasoning, encrypted reasoning and known environment credentials are removed; captured fields are truncated after 60,000 characters. This is not a general personal-data anonymizer. Configure project access, retention and content capture for your institution.
+
+Traces are exported at request completion with a three-second network timeout; a failed/partially rejected export logs a generic server warning and leaves the question result unchanged. Disabled or incompletely configured tracing sends nothing. This is a best-effort operational audit trail: it has no durable export queue, no immutable ledger, and cannot guarantee delivery after process failure. Browser retries are separate server attempts and appear as separate traces with the same question correlation. “Stop waiting” cancels the browser wait; server work may still finish and be traced. Live Langfuse connectivity must be verified after configuring your project credentials.
 
 ## Retrieval and prompt efficiency
 
@@ -129,6 +153,9 @@ Run `pnpm typecheck`, `pnpm test`, `pnpm bank validate`, `pnpm build`, then `pnp
 - `providers-check.ts`: simulated OpenAI/Azure/Anthropic requests, reasoning/model/schema compatibility, image and tool continuity, endpoint restriction and redacted errors.
 - `retry-check.ts`: interrupted HTML response recovery, identical-body retry, two-attempt bound, authentication and cancellation behavior.
 - `migration-check.ts`: `.env` settings selection, authentication/origin/body/concurrency checks, payload-size comparison and an isolated EM2 import fixture. It tests unverified/duplicate rejection, real image cropping, data backups and deprecation without changing the production bank.
+- `updates-check.ts`: editable filled geometry and visible AI disclosure in DOCX XML; session-history round trips and refinement counts; prompt parsing/version/hash; mocked Langfuse trace structure, token usage, content exclusion/redaction, concurrent isolation and nonfatal export failures.
+
+For the 2026-09-16 changes, the full regression suite, TypeScript check, production build and HTTP page smoke check passed. New files pass the configured lint rules; repository-wide lint still reports existing issues. Browser interaction and Word visual rendering were not verified in this environment. Langfuse integration is covered with mocked requests; live project ingestion remains to be verified after credentials are configured.
 
 Migration validation also used real HTTP requests against development and built Node servers. See `VALIDATION.md` for the recorded results and remaining live-provider checks. Live PDF-to-model extraction and a real EM2 generation still require an authorized configured provider; simulated tests do not prove extraction accuracy.
 
