@@ -4,8 +4,8 @@ import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {build} from 'esbuild';
 import {serverConfig} from '../lib/server-config';
-import {authorize,readBody,generationSlot,HttpError} from '../lib/security';
-import {manifestSchema,taxonomySchema,extractedSchema,validateTaxonomy,validateExtracted} from '../lib/import-schema';
+import {readBody,apiError,generationSlot,HttpError} from '../lib/security';
+import {taxonomySchema,extractedSchema,validateTaxonomy,validateExtracted} from '../lib/import-schema';
 import {promptExamples} from '../lib/generation';
 import {retrieve} from '../lib/retrieval';
 import {briefSchema} from '../lib/schema';
@@ -14,9 +14,10 @@ assert.equal(serverConfig({AI_PROVIDER:'azure',AZURE_OPENAI_API_KEY:'fixture',AZ
 assert.equal(briefSchema.parse({module:'EM2',topic:'EM2-1',subtopics:['EM2-1.1'],totalMarks:10,difficulty:'Basic'}).module,'EM2');
 const password=process.env.APP_PASSWORD,username=process.env.APP_USERNAME;process.env.APP_PASSWORD='fixture-password';process.env.APP_USERNAME='studio';
 try{
- await assert.rejects(()=>authorize(new Request('http://127.0.0.1/')),/Sign in/);
- const headers={authorization:'Basic '+btoa('studio:fixture-password'),'content-type':'application/json'};
- await authorize(new Request('http://127.0.0.1/',{headers}));
+ // Legacy deployment variables must not re-enable the removed app login.
+ const headers={'content-type':'application/json'};
+ assert.deepEqual(await readBody(new Request('https://studio.example/api',{method:'POST',headers,body:'{"valid":true}'})),{valid:true});
+ assert.equal(apiError(new HttpError(401,'Upstream authorization failed.')).headers.has('WWW-Authenticate'),false);
  await assert.rejects(()=>readBody(new Request('http://127.0.0.1/api',{method:'POST',headers:{...headers,origin:'https://evil.example'},body:'{}'})),/origin/);
  await assert.rejects(()=>readBody(new Request('http://127.0.0.1/api',{method:'POST',headers,body:'123456'}),3),/large/);
  const a=generationSlot(),b=generationSlot();assert.throws(()=>generationSlot(),HttpError);a();b();
@@ -24,14 +25,14 @@ try{
 const ctx=retrieve({module:'EM1',topic:'EM1-1',subtopics:['EM1-1.2'],totalMarks:10,difficulty:'Basic'});
 const before=JSON.stringify(ctx.examples).length,after=JSON.stringify(promptExamples(ctx.examples)).length;
 assert(after<before);assert(promptExamples(ctx.examples).every(q=>'solution'in q&&'marking_scheme_json'in q&&'alternative_marking'in q));
-console.log(`PASS: server keys, authorization, origin/body/concurrency guards; example payload ${before} -> ${after} characters.`);
+console.log(`PASS: server keys, password-free access with legacy login variables, origin/body/concurrency guards; example payload ${before} -> ${after} characters.`);
 
 const fixture=path.resolve('test-output/import-fixture-'+Date.now());fs.mkdirSync(fixture,{recursive:true});
 for(const d of ['data','scripts','imports/staging/fixture/P1/questions','imports/staging/fixture/P1/solutions'])fs.mkdirSync(path.join(fixture,d),{recursive:true});
 const write=(p:string,v:unknown)=>fs.writeFileSync(path.join(fixture,p),JSON.stringify(v));
 const source=JSON.parse(fs.readFileSync('data/bank.json','utf8'));write('data/bank.json',{...source,questions:[source.questions[0]],images:{}});
 assert.doesNotThrow(()=>taxonomySchema.parse({topics:source.topics}));
-const historical=source.topics.find((t:any)=>t.status==='Deprecated'&&!t.syllabus_excerpt);
+const historical=source.topics.find((t:{status:string;syllabus_excerpt:string})=>t.status==='Deprecated'&&!t.syllabus_excerpt);
 assert(historical,'Existing historical taxonomy fixture must be retained.');
 assert.throws(()=>taxonomySchema.parse({topics:[{...historical,status:'Active'}]}),/active topic needs/);
 write('data/modules.json',JSON.parse(fs.readFileSync('data/modules.json','utf8')));write('data/reference-crops.json',{});
@@ -64,5 +65,5 @@ assert.equal(JSON.parse(fs.readFileSync(path.join(fixture,'data/bank.json'),'utf
 assert.equal(JSON.parse(fs.readFileSync(path.join(fixture,'data/modules.json'),'utf8')).at(-1).id,'EM2');
 assert.notEqual(run('commit','fixture').status,0);
 assert.equal(run('status','EM2-1.1','Deprecated').status,0);
-assert.equal(JSON.parse(fs.readFileSync(path.join(fixture,'data/bank.json'),'utf8')).topics.find((t:any)=>t.taxonomy_id==='EM2-1.1').status,'Deprecated');
+assert.equal(JSON.parse(fs.readFileSync(path.join(fixture,'data/bank.json'),'utf8')).topics.find((t:{taxonomy_id:string})=>t.taxonomy_id==='EM2-1.1').status,'Deprecated');
 console.log('PASS: PDF render/text/hash, isolated EM2 import, unverified rejection, image crop, duplicate rejection, backup and deprecation. No provider API called.');

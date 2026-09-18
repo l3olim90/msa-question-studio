@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { authorize, readBody, apiError } from '@/lib/security';
+import { readBody, apiError } from '@/lib/security';
 import {
   approveQuestion,
   deleteQuestion,
@@ -8,9 +8,7 @@ import {
 } from '@/lib/repository';
 const headers = { 'Cache-Control': 'no-store' };
 export async function GET(request: Request) {
-  try {
-    await authorize(request);
-    const query = new URL(request.url).searchParams;
+  try {    const query = new URL(request.url).searchParams;
     return Response.json(
       query.has('id')
         ? await getQuestion(z.uuid().parse(query.get('id')))

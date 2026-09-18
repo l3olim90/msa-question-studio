@@ -1,5 +1,11 @@
 # Migration validation
 
+## Remove the separate app login: 18 September 2026
+
+Removed Basic authentication from page/API handling and removed the login fields from server configuration, environment examples and both ignored local environment files. Legacy `APP_USERNAME`/`APP_PASSWORD` values in Vercel are ignored, so no dashboard environment change is required. Hosting deployment protection is unchanged. Everyone who can reach the app shares its repository, source bank, traces and generation capacity.
+
+TypeScript, the complete regression suite and the Vercel build passed. The built function returned 200 for the home page and repository/import/trace APIs without an Authorization header, including with legacy login variables set and with stale browser credentials. Reference retrieval, signed image access and security headers passed. Invalid approval payloads still returned 400, and cross-origin repository/import requests returned 403. Regression checks retain request-size and generation-capacity limits. No live provider generation was needed for this access-only change; hosted page verification remains subject to Vercel's own sign-in protection.
+
 ## Vercel routing middleware correction: 18 September 2026
 
 The first hosted deployment reported `MIDDLEWARE_INVOCATION_FAILED`. The root `middleware.ts` collided with Vercel's automatic Other-framework routing middleware discovery, outside Vinext's aliases and Node server. Moved the unchanged authentication and security-header behavior to Vinext's `proxy.ts` convention. The build now rejects root middleware files to prevent this deployment conflict.

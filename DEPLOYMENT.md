@@ -2,7 +2,7 @@
 
 The Vercel site runs the app; Supabase PostgreSQL stores the approved repository, revisions, audit traces, module syllabus, source questions and import queue. Supabase private Storage holds PDFs and source images. The same database can serve local development and the hosted app, so approved questions survive sessions and deployments.
 
-The existing shared username/password protects this installation. Everyone with that login shares the same repository and source bank. Individual accounts and per-user permissions are not implemented.
+The app has no separate username/password login. Vercel deployment protection controls access to the hosted site. Everyone who can reach the app shares the repository, source bank, traces and generation capacity; individual accounts and per-user permissions are not implemented. If hosting protection is disabled, anyone who can reach the URL can use these features.
 
 ## 1. Configure server credentials
 
@@ -13,8 +13,6 @@ STUDIO_STORAGE=supabase
 SUPABASE_URL=https://YOUR-PROJECT.supabase.co
 SUPABASE_SECRET_KEY=YOUR-SERVER-SECRET-KEY
 DATABASE_URL=YOUR-TRANSACTION-POOLER-CONNECTION-STRING
-APP_USERNAME=studio
-APP_PASSWORD=YOUR-STRONG-PASSWORD
 ```
 
 In Supabase, find the secret key under **Project Settings → API Keys** (the server secret, not the publishable key). Find the PostgreSQL URL under **Connect → Transaction pooler**; use port 6543, replace the password placeholder, and URL-encode special characters in the password. It is a different credential from the API key. This app disables prepared statements and reserves connections to avoid pipelining independent transactions through the pooler.
@@ -34,7 +32,7 @@ pnpm cloud migrate-local
 
 These commands have already been run for the initial connected project. Repeat them only when initializing another project, applying migrations or adding seed data. They are safe to rerun: existing source records and repository revisions are preserved. `migrate-local` reads the configured local SQLite database without deleting it; if none exists, it reports that there is nothing to copy. It does not migrate unfinished local PDF imports; finish those locally or upload the PDF pair again after switching.
 
-Tables are under the **studio** schema in Supabase, not `public`. Browser `anon` and `authenticated` roles have no access. Do not expose that schema through the Data API or make the `studio-sources` bucket public. The app accesses data on the server and creates short-lived storage links after authentication.
+Tables are under the **studio** schema in Supabase, not `public`. Browser `anon` and `authenticated` roles have no access. Do not expose that schema through the Data API or make the `studio-sources` bucket public. The app accesses data on the server and creates short-lived storage links through its API.
 
 ## 3. Deploy the repository to Vercel
 
@@ -50,13 +48,13 @@ Commit and push the application changes, excluding `.env`, databases, uploads an
 
 `vercel.json` supplies the build configuration. Vinext and Nitro generate Vercel's `.vercel/output` Build Output API package, including server functions and module prompt files. This is a Vinext app, so do not select the Next.js framework preset. The adapter is pinned to a beta release; validate before upgrading it.
 
-Authentication is implemented in the root `proxy.ts`, which Vinext bundles inside its Node server. Do not rename it to `middleware.ts` or add a Vercel `proxy.entrypoint`: those cause Vercel to build separate platform routing middleware outside the app's Vite aliases and runtime. The build rejects root middleware files to catch this conflict before deployment.
+Response security headers are implemented in the root `proxy.ts`, which Vinext bundles inside its Node server. Do not rename it to `middleware.ts` or add a Vercel `proxy.entrypoint`: those cause Vercel to build separate platform routing middleware outside the app's Vite aliases and runtime. The build rejects root middleware files to catch this conflict before deployment.
 
-Add the cloud, login and active provider variables from step 1 to Vercel's **Environment Variables** before deploying. Do not use `STUDIO_DB_PATH` or the local Python path. Set `STUDIO_STORAGE=supabase`. Environment changes require a new deployment. Set production credentials for Production; connect Preview deployments only if you intend them to share the live repository, or use a separate Supabase project for previews.
+Add the cloud and active provider variables from step 1 to Vercel's **Environment Variables** before deploying. Do not use `STUDIO_DB_PATH` or the local Python path. Set `STUDIO_STORAGE=supabase`. Environment changes require a new deployment. Set production credentials for Production; connect Preview deployments only if you intend them to share the live repository, or use a separate Supabase project for previews.
 
-For this setup, an ignored `.env.vercel` file has been prepared containing only the deployment variables. Use Vercel's environment-variable import/paste control to transfer it privately. It contains real credentials and must stay out of Git. Regenerate or update it if credentials change. The generated app login password is the `APP_PASSWORD` value in `.env`; the default username is `studio`.
+For this setup, an ignored `.env.vercel` file has been prepared containing only the deployment variables. Use Vercel's environment-variable import/paste control to transfer it privately. It contains real credentials and must stay out of Git. Regenerate or update it if credentials change. Legacy `APP_USERNAME` and `APP_PASSWORD` variables are ignored by the app and can be removed from Vercel settings.
 
-Open the deployed URL and enter `APP_USERNAME` / `APP_PASSWORD`. Check reference images, generate one small question, approve it, reload, reopen it from the repository, and export both worksheet versions. The deployed URL needs its own smoke test; a successful local build does not establish that a Vercel deployment works.
+Open the deployed URL; sign into Vercel if its deployment protection requests it. The app does not show an additional login prompt. Check reference images, generate one small question, approve it, reload, reopen it from the repository, and export both worksheet versions. The deployed URL needs its own smoke test; a successful local build does not establish that a Vercel deployment works.
 
 ## 4. Enable PDF processing
 

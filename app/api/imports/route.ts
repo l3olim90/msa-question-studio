@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { cloudEnabled } from '@/lib/cloud';
 import {getCloudImport,listCloudImports,prepareCloudImport,submitCloudImport,saveCloudReview,commitCloudImport,retryCloudImport,uploadMetadata} from '@/lib/cloud-imports';
-import { authorize, readBody, apiError, HttpError } from '@/lib/security';
+import { readBody, apiError, HttpError } from '@/lib/security';
 import {
   startImport,
   getImport,
@@ -14,7 +14,6 @@ import {
 const headers = { 'Cache-Control': 'no-store' };
 export async function GET(request: Request) {
   try {
-    await authorize(request);
     const id = new URL(request.url).searchParams.get('id');
     return Response.json(cloudEnabled() ? (id ? await getCloudImport(id) : await listCloudImports()) : (id ? getImport(id) : { imports: listImports(),storage:'local' }), {
       headers,
@@ -44,7 +43,6 @@ export async function POST(request: Request) {
         { headers },
       );
     }
-    await authorize(request);
     if(cloudEnabled())throw new HttpError(415,'Use direct storage uploads for cloud PDF imports. Refresh the import screen.');
     const origin = request.headers.get('origin');
     if (origin && origin !== new URL(request.url).origin)

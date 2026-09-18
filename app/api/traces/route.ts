@@ -1,10 +1,8 @@
 import { z } from 'zod';
 import { store } from '@/lib/store';
-import { authorize, apiError, HttpError } from '@/lib/security';
+import { apiError, HttpError } from '@/lib/security';
 export async function GET(request: Request) {
-  try {
-    await authorize(request);
-    const query = new URL(request.url).searchParams;
+  try {    const query = new URL(request.url).searchParams;
     const db = store;
     if (query.has('id')) {
       const id = z.uuid().parse(query.get('id'));

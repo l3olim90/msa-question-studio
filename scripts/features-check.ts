@@ -68,20 +68,7 @@ fixture.review.scope_passed = true;
 fixture.review.format_passed = true;
 fixture.promptVersion = loadPrompts('EM1').version;
 fixture.promptHash = loadPrompts('EM1').hash;
-const headers = {
-  'Content-Type': 'application/json',
-  ...(process.env.APP_PASSWORD
-    ? {
-        Authorization:
-          'Basic ' +
-          Buffer.from(
-            (process.env.APP_USERNAME || 'studio') +
-              ':' +
-              process.env.APP_PASSWORD,
-          ).toString('base64'),
-      }
-    : {}),
-};
+const headers = { 'Content-Type': 'application/json' };
 const request = (url: string, body: unknown) =>
   new Request('http://127.0.0.1' + url, {
     method: 'POST',
@@ -304,7 +291,7 @@ try {
     2,
   );
   console.log(
-    'PASS: SQLite approval/replacement/delete/revision conflicts, cross-process persistence, authenticated APIs, current repository worksheet validation and student/lecturer DOCX structure.',
+    'PASS: SQLite approval/replacement/delete/revision conflicts, cross-process persistence, password-free APIs, current repository worksheet validation and student/lecturer DOCX structure.',
   );
 
   globalThis.fetch = async () => {
@@ -551,15 +538,11 @@ try {
   badForm.set('semester', '1');
   badForm.set('questionPdf', new File(['not a PDF'], 'test.pdf'));
   badForm.set('solutionPdf', new File(['not a PDF'], 'solution.pdf'));
-  const authOnly: Record<string, string> = process.env.APP_PASSWORD
-    ? { Authorization: headers.Authorization! }
-    : {};
   assert.equal(
     (
       await importRoute(
         new Request('http://127.0.0.1/api/imports', {
           method: 'POST',
-          headers: authOnly,
           body: badForm,
         }),
       )

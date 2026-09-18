@@ -10,7 +10,7 @@ This is a React 19 / TypeScript application using Vinext (the Next.js-compatible
 
 ```mermaid
 flowchart TD
-  A[Browser brief: module, topic, format, scope, marks] --> B[Node API: auth, origin, size, schema, capacity checks]
+  A[Browser brief: module, topic, format, scope, marks] --> B[Node API: origin, size, schema, capacity checks]
   B --> C[Filter active syllabus and verified bank records]
   C --> D[Rank examples by scope, format, difficulty and text relevance]
   D --> E[Plan feasible configuration]
@@ -47,14 +47,14 @@ Before semantic review, a KaTeX parse failure now gets one targeted formatting r
 | `lib/providers.ts` | OpenAI Responses, Azure Responses and Anthropic Messages adapters, error redaction, image/tool/schema translation. |
 | `lib/retrieval.ts` | Module/status filters, ranking and reference assembly. |
 | `lib/schema.ts` | Brief, question, graph, feasibility and review contracts. |
-| `lib/security.ts`, `middleware.ts` | Basic authentication, HTTP guards, request bounds and response security headers. |
+| `lib/security.ts`, `proxy.ts` | HTTP guards, request bounds and response security headers. |
 | `lib/word.ts`, `lib/word-shapes.ts` | DOCX ZIP/OOXML, native OMML math and grouped DrawingML shapes. |
 
 Generation requests contain `{brief, previous?, edit?, mode?, sourceIds?, sessionId?, questionId?}`. Session/question identifiers are validated correlation labels, not authentication identities. Browser-supplied connections are rejected, and key headers are never used. Successful responses contain `draft`, `references`, `review`, `feasibility`, `calculations`, `brief`, `effectiveBrief`, `promptVersion` and `promptHash`. New MCQ requests return `{candidates: [...]}`.
 
 ### Approved repository and paper assembly
 
-`STUDIO_STORAGE=local` uses `lib/database.ts` for a versioned SQLite database with Node's built-in `node:sqlite`, WAL mode, foreign keys and a five-second busy timeout. Its default path is outside the checkout; `STUDIO_DB_PATH` overrides it. `STUDIO_STORAGE=supabase` uses PostgreSQL through `lib/store.ts` and `lib/cloud.ts`, with private tables in the `studio` schema. Vercel requires Supabase mode. All sessions share the repository under the existing app authentication boundary. See [deployment setup](DEPLOYMENT.md) for credentials, migration and hosting.
+`STUDIO_STORAGE=local` uses `lib/database.ts` for a versioned SQLite database with Node's built-in `node:sqlite`, WAL mode, foreign keys and a five-second busy timeout. Its default path is outside the checkout; `STUDIO_DB_PATH` overrides it. `STUDIO_STORAGE=supabase` uses PostgreSQL through `lib/store.ts` and `lib/cloud.ts`, with private tables in the `studio` schema. Vercel requires Supabase mode. All sessions share the repository under the hosting access controls. See [deployment setup](DEPLOYMENT.md) for credentials, migration and hosting.
 
 | Table | Purpose |
 | --- | --- |
@@ -83,7 +83,7 @@ The document contains the authoring and planning system prompts, shared Structur
 
 `AUDIT_CAPTURE_CONTENT=true` is the default for local traceability. Setting it to false omits input/output content while retaining timing/status, prompt identity, usage and redacted errors. Credentials from environment variables, authorization/header fields, image bytes, encrypted/hidden reasoning, and nested JSON equivalents are excluded. Content fields over two million characters retain an explicitly truncated preview. This is not a general personal-data anonymizer. Traces inherit the installation's access controls; configure filesystem access and backup/retention locally. No automatic retention purge is performed.
 
-Database logging failure does not discard a valid generated question: it emits a server warning and an `auditWarning` in successful question results. Running records can remain after a process crash. Rejected requests before the generation wrapper (authentication, missing server key, invalid envelope, capacity) do not create generation traces. Approval/replacement/deletion are separate transactional repository events. Browser retries are separate traces with the same question correlation. ?Stop waiting? cancels only the browser wait; server work may finish and be traced. Stored snapshots are not a cryptographically tamper-proof compliance ledger.
+Database logging failure does not discard a valid generated question: it emits a server warning and an `auditWarning` in successful question results. Running records can remain after a process crash. Rejected requests before the generation wrapper (missing server key, invalid envelope, capacity) do not create generation traces. Approval/replacement/deletion are separate transactional repository events. Browser retries are separate traces with the same question correlation. ?Stop waiting? cancels only the browser wait; server work may finish and be traced. Stored snapshots are not a cryptographically tamper-proof compliance ledger.
 
 ## Retrieval and prompt efficiency
 
@@ -109,7 +109,7 @@ Changing a module label does not require changing its ID. Deprecation preserves 
 
 ## PDF ingestion and verification
 
-`/api/imports` accepts bounded multipart uploads (two PDFs, 50 MB each), validates metadata/signatures, stages files under ignored `imports/inbox/ui-<UUID>/`, and starts the existing bank CLI without a shell. Background status is stored in SQLite; review JSON and rendered pages stay in the staging folder. One browser import processes at a time. Transient provider failures retry once; an error job can be restarted from its stored PDFs as a new batch without overwriting prior evidence. `lib/source-marking.ts` canonicalizes incorrectly escaped LaTeX in nested marking JSON and still rejects malformed non-JSON structures. A reopened interrupted job recovers staged review data or reports an error. Approval requires every record and the entire paper to be verified with notes and no unresolved issues. The CLI revalidates taxonomy/crops/marks/coverage before committing, backs up source data, and rejects duplicate paper IDs. Uploaded identical source PDF hashes are rejected once committed. Originals are served only through authenticated fixed-path PDF routes. Existing new-module CLI support remains available. Production installations using PDF imports need `scripts/`, `lib/`, the data files, Python import dependencies, and the runtime `esbuild` dependency alongside the built app. Do not commit simultaneously from browser and CLI.
+`/api/imports` accepts bounded multipart uploads (two PDFs, 50 MB each), validates metadata/signatures, stages files under ignored `imports/inbox/ui-<UUID>/`, and starts the existing bank CLI without a shell. Background status is stored in SQLite; review JSON and rendered pages stay in the staging folder. One browser import processes at a time. Transient provider failures retry once; an error job can be restarted from its stored PDFs as a new batch without overwriting prior evidence. `lib/source-marking.ts` canonicalizes incorrectly escaped LaTeX in nested marking JSON and still rejects malformed non-JSON structures. A reopened interrupted job recovers staged review data or reports an error. Approval requires every record and the entire paper to be verified with notes and no unresolved issues. The CLI revalidates taxonomy/crops/marks/coverage before committing, backs up source data, and rejects duplicate paper IDs. Uploaded identical source PDF hashes are rejected once committed. Originals are served through fixed-path PDF routes under the hosting access controls. Existing new-module CLI support remains available. Production installations using PDF imports need `scripts/`, `lib/`, the data files, Python import dependencies, and the runtime `esbuild` dependency alongside the built app. Do not commit simultaneously from browser and CLI.
 
 
 ```mermaid
@@ -138,7 +138,7 @@ Implemented:
 
 - Provider keys load on the server from `.env` or process environment. `.env` and import staging are Git-ignored; `.env.example` has no keys. No key logging or browser storage. Browser API-key entry and fallback are disabled.
 - Configured server connections cannot be overridden by a browser-supplied endpoint or model. Azure hosts use a strict HTTPS Azure-domain allowlist. Redirects are never followed with provider credentials.
-- Password authentication covers the app and APIs when `APP_PASSWORD` is set. Basic authentication requires **HTTPS** outside localhost. Defaults bind the server to `127.0.0.1`; do not expose it without configuring authentication and a TLS reverse proxy. Host checks are defense in depth, not a trusted network boundary.
+- The app and APIs have no separate login. Vercel deployment protection (or an access-controlled HTTPS reverse proxy for another host) determines who can reach them. Everyone with access can generate, approve, replace/delete repository questions, review imports and view traces. Default local commands bind to `127.0.0.1`. Legacy app username/password variables are ignored.
 - Same-origin checks on JSON POSTs; content type, streamed body-size bounds (250 KB), edit length and Zod input contracts. At most two concurrent generations and six generation starts per minute per Node process. Auth is checked before provider work.
 - Model prompts explicitly treat source material and user text as untrusted data. Tools are limited to an allowlisted calculator with expression-length, AST-node and output-size bounds; no shell, filesystem or arbitrary network tool is exposed to the model.
 - Draft schemas, active syllabus ID checks, exact effective mark totals, MCQ format rules, math parsing and graph bounds run independently of the reviewer model. The model also reviews scope, solutions, notation and format; material unresolved failures are withheld.
@@ -155,7 +155,7 @@ Limitations: prompt instructions and a model reviewer cannot guarantee resistanc
 | `... returned an HTML page ... instead of question data` | A proxy/provider interruption or sign-in page replaced JSON. Transient service failures have one browser retry with the same request; authentication failures do not. |
 | `Generation capacity reached` | Wait for active work/rate window. Multiple browser retries can consume another generation slot and provider calls. |
 | `Invalid origin`, `Request too large`, `Use application/json` | A request was rejected before generation; correct the caller rather than relaxing the guard. |
-| `Sign in to Question Studio` | Browser Basic-auth challenge or invalid credentials. Use APP_USERNAME / APP_PASSWORD, not a provider key. |
+| Vercel sign-in page | Hosting deployment protection is separate from the app. Sign into the Vercel account with deployment access. |
 | Azure 400/401/404 | Check resource endpoint, deployment, model access and key. Azure uses Responses; the old chat-completions reasoning/tool combination is not used. |
 | `The generated maths could not be formatted correctly` | Unsupported/malformed LaTeX remained after targeted escape repair. Retry or simplify notation. |
 | `Verify the entire paper/solution pair` | Import is still staged. Compare all rows with originals, then fill verification fields. |
@@ -168,7 +168,7 @@ Run `pnpm typecheck`, `pnpm test`, `pnpm bank validate`, `pnpm build`, then `pnp
 - `check.ts`: retrieval, modules/format contracts, mark totals, simulated author/tool/review/repair, MCQ candidate replacement, OMML, vector styles, graph shading/dividers, LaTeX escape repair and label overlap layout.
 - `providers-check.ts`: simulated OpenAI/Azure/Anthropic requests, reasoning/model/schema compatibility, image and tool continuity, endpoint restriction and redacted errors.
 - `retry-check.ts`: interrupted HTML response recovery, identical-body retry, two-attempt bound, authentication and cancellation behavior.
-- `migration-check.ts`: `.env` settings selection, authentication/origin/body/concurrency checks, payload-size comparison and an isolated EM2 import fixture. It tests unverified/duplicate rejection, real image cropping, data backups and deprecation without changing the production bank.
+- `migration-check.ts`: `.env` settings selection, password-free access and origin/body/concurrency checks, payload-size comparison and an isolated EM2 import fixture. It tests unverified/duplicate rejection, real image cropping, data backups and deprecation without changing the production bank.
 - `updates-check.ts`: editable filled geometry and visible AI disclosure in DOCX XML; session-history round trips and refinement counts; prompt parsing/version/hash; module-qualified prompt configuration. `features-check.ts` additionally checks SQLite lifecycle and cross-process persistence, revision conflicts, authenticated routes, student/lecturer worksheet structure, local audit content/usage/redaction/isolation, similar-question provenance, configuration recommendations and import approval gates.
 
 For the 2026-09-18 changes, see `VALIDATION.md` for the current checks and remaining verification boundaries. Tests use isolated temporary SQLite databases and source-bank fixtures; they do not approve synthetic questions in the live repository or incur provider charges.

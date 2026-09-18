@@ -60,7 +60,7 @@ Default model names preserve the previous configuration; choose models available
 
 Set `DESMOS_API_KEY` for graphs and graph images in Word. It is a browser API key and is visible to the browser. Provider keys remain server-side. Never commit `.env` or put secrets in `VITE_` / `NEXT_PUBLIC_` variables.
 
-For shared use, set `APP_USERNAME` and a strong `APP_PASSWORD` and serve through an HTTPS reverse proxy. Default commands bind to localhost. Do not expose an unauthenticated server or use plain HTTP over a network. DOCUMENTATION.md explains the security limits.
+The app opens without a separate username/password prompt. Vercel deployment protection controls access to the hosted site; local commands bind to localhost. Everyone who can reach the app shares its repository, source bank and generation capacity. Serve shared installations over HTTPS. DOCUMENTATION.md explains the access model.
 
 ## Generate, refine and export
 

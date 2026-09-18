@@ -1,9 +1,8 @@
-import { authorize, apiError, HttpError } from '@/lib/security';
+import { apiError, HttpError } from '@/lib/security';
 import { cloudEnabled } from '@/lib/cloud';
 import { signedAsset } from '@/lib/cloud-assets';
 export async function GET(request: Request) {
   try {
-    await authorize(request);
     if (!cloudEnabled())
       throw new HttpError(404, 'Cloud source storage is not enabled.');
     const name = new URL(request.url).searchParams.get('name') || '';

@@ -1,13 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { authorize, apiError, HttpError } from '@/lib/security';
+import { apiError, HttpError } from '@/lib/security';
 import { getImport, importPaths } from '@/lib/source-imports';
 import { cloudEnabled } from '@/lib/cloud';
 import { cloudImportRow } from '@/lib/cloud-imports';
 import { signedFile } from '@/lib/cloud-assets';
 export async function GET(request: Request) {
   try {
-    await authorize(request);
     const query = new URL(request.url).searchParams;
     const id = query.get('id') || '';
     const kind = query.get('kind');
