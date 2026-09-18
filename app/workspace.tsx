@@ -24,6 +24,12 @@ import { mathParts } from '@/lib/math-text';
 import { svgDiagram } from '@/lib/diagram';
 import { type Brief } from '@/lib/schema';
 import { APP_VERSION } from '@/lib/version';
+import { configurationIssues } from '@/lib/configuration';
+import { studioApi } from '@/lib/client-api';
+import type { RepositoryEntry } from '@/lib/repository';
+import { Library } from './library';
+import { Activity } from './activity';
+import { SourceImports } from './source-imports';
 import {
   HISTORY_KEY,
   emptyHistory,
@@ -148,11 +154,97 @@ export default function Workspace({
     [manual, setManual] = useState(false);
   const [history, setHistory] = useState<QuestionHistory | null>(null);
   const [historyWarning, setHistoryWarning] = useState('');
+  const [view, setView] = useState<
+    'generate' | 'repository' | 'worksheet' | 'sources' | 'activity'
+  >('generate');
+  const [generationMode, setGenerationMode] = useState<'new' | 'similar'>(
+    'new',
+  );
+  const [referenceError, setReferenceError] = useState(''),
+    [referencesLoading, setReferencesLoading] = useState(true);
+  const [repositoryRefresh, setRepositoryRefresh] = useState(0),
+    [approvalMessage, setApprovalMessage] = useState('');
+  const [bindings, setBindings] = useState<
+    Record<string, { id: string; revision: number; saved: string }>
+  >({});
+  const currentKey = history?.activeId + ':' + candidateIndex;
+  const binding = bindings[currentKey];
+  const unchangedApproved =
+    !!binding && JSON.stringify(result) === binding.saved;
+  function openRepository(entry: RepositoryEntry) {
+    const batchId = crypto.randomUUID();
+    setHistory((current) =>
+      addQuestions(current || emptyHistory(), [entry.result], batchId),
+    );
+    setBindings((current) => ({
+      ...current,
+      [batchId + ':0']: {
+        id: entry.id,
+        revision: entry.revision,
+        saved: JSON.stringify(entry.result),
+      },
+    }));
+    setCandidates([entry.result]);
+    setCandidateIndex(0);
+    setResult(entry.result);
+    setSolution(0);
+    setDiagramIndex(0);
+    setShapeIndex(0);
+    setEdit('');
+    setError('');
+    setManual(!!entry.result.manual);
+    setApprovalMessage(
+      'Opened approved revision ' +
+        entry.revision +
+        '. Refine it, then approve a replacement when ready.',
+    );
+    setView('generate');
+  }
+  async function approve() {
+    if (!result) return;
+    setBusy('Saving approved question...');
+    setError('');
+    setGenerationError(false);
+    try {
+      const entry = await studioApi<RepositoryEntry>(
+        '/api/repository',
+        'POST',
+        {
+          result,
+          approved: true,
+          id: binding?.id,
+          revision: binding?.revision,
+        },
+      );
+      setBindings((current) => ({
+        ...current,
+        [currentKey]: {
+          id: entry.id,
+          revision: entry.revision,
+          saved: JSON.stringify(result),
+        },
+      }));
+      setRepositoryRefresh((current) => current + 1);
+      setApprovalMessage(
+        'Approved revision ' + entry.revision + ' saved to the repository.',
+      );
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy('');
+    }
+  }
   useEffect(() => {
     let saved = emptyHistory();
     try {
       const raw = sessionStorage.getItem(HISTORY_KEY);
-      if (raw) saved = readHistory(raw);
+      if (raw) {
+        saved = readHistory(raw);
+        sessionStorage.removeItem(HISTORY_KEY);
+        setHistoryWarning(
+          'Recovered drafts from the previous session history. Approve the questions you want to keep in the repository.',
+        );
+      }
     } catch {
       setHistoryWarning(
         'Saved session history could not be restored. New questions can still be generated.',
@@ -167,26 +259,13 @@ export default function Workspace({
       setManual(!!batch.results[saved.candidateIndex].manual);
     }
   }, []);
-  useEffect(() => {
-    if (!history) return;
-    try {
-      sessionStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-    } catch {
-      // Do not leave an older, apparently current history snapshot after a failed write.
-      try {
-        sessionStorage.removeItem(HISTORY_KEY);
-      } catch {}
-      setHistoryWarning(
-        'Browser session storage is unavailable or full. History remains available on this page, but export your questions before refreshing or closing it.',
-      );
-    }
-  }, [history]);
   function openHistory(id: string, index: number) {
     if (busy || !history) return;
     const batch = history.batches.find((b) => b.id === id);
     if (!batch?.results[index]) return;
     setHistory(selectQuestion(history, id, index));
     setCandidates(batch.results);
+    setApprovalMessage('');
     setCandidateIndex(index);
     setResult(batch.results[index]);
     setManual(!!batch.results[index].manual);
@@ -195,6 +274,7 @@ export default function Workspace({
     setShapeIndex(0);
     setEdit('');
     setError('');
+    setApprovalMessage('');
   }
   const brief: Brief = {
     module,
@@ -208,11 +288,14 @@ export default function Workspace({
     autoParts: questionType === 'Structured' && multiple && autoParts,
     multipleParts: questionType === 'Structured' && multiple,
     partCount:
-      questionType === 'Structured' && multiple ? Number(partCount) : 2,
+      questionType === 'Structured' && multiple && !autoParts
+        ? Number(partCount)
+        : 2,
     totalMarks: questionType === 'MCQ' ? 2 : Number(marks),
     difficulty: questionType === 'MCQ' ? 'Intermediate' : difficulty,
     specifications: spec,
   };
+  const configIssues = configurationIssues(brief, topics);
   const validParts =
     questionType === 'MCQ' ||
     !multiple ||
@@ -232,6 +315,9 @@ export default function Workspace({
   const abort = useRef<AbortController | null>(null);
   useEffect(() => {
     const controller = new AbortController();
+    setReferencesLoading(true);
+    setReferenceError('');
+    setRefs([]);
     const timer = setTimeout(() => {
       fetch('/api/references', {
         method: 'POST',
@@ -244,11 +330,14 @@ export default function Workspace({
           if (!r.ok) throw new Error(d.error);
           setRefs(d.references);
           setExact(d.exactExamples);
+          setReferencesLoading(false);
         })
         .catch((e) => {
           if (e.name !== 'AbortError') {
             setRefs([]);
             setExact(0);
+            setReferenceError(e.message);
+            setReferencesLoading(false);
           }
         });
     }, 350);
@@ -267,6 +356,7 @@ export default function Workspace({
     creative,
     multiple,
     partCount,
+    autoParts,
   ]);
   useEffect(() => {
     setError('');
@@ -281,9 +371,18 @@ export default function Workspace({
     creative,
     multiple,
     partCount,
+    autoParts,
   ]);
   async function generate(isEdit = false) {
     setGenerationError(true);
+    setApprovalMessage('');
+    if (!isEdit && (configIssues.length || referenceError)) {
+      setError(
+        configIssues.map((i) => i.field + ': ' + i.recommendation).join(' ') ||
+          referenceError,
+      );
+      return;
+    }
     if (!isEdit && (!validMarks || !validParts || !brief.subtopics.length)) {
       setError(
         'Select at least one sub-topic, valid marks and a whole-number part count from 2 to 6 when enabled.',
@@ -313,6 +412,12 @@ export default function Workspace({
               ? result.effectiveBrief
               : result?.brief
             : brief,
+          mode: isEdit ? 'new' : generationMode,
+          sourceQuestionId: isEdit ? result?.sourceQuestionId : undefined,
+          sourceIds:
+            !isEdit && generationMode === 'similar'
+              ? refs.map((r) => r.id)
+              : undefined,
           sessionId: history?.sessionId,
           questionId: batchId + ':' + (isEdit ? candidateIndex : 0),
           previous: isEdit ? result?.draft : undefined,
@@ -327,6 +432,10 @@ export default function Workspace({
       const generated: Result[] = (
         isEdit || !d.candidates ? [d] : d.candidates
       ).map((item: unknown) => resultSchema.parse(item));
+      if (isEdit && result?.generationMode === 'similar') {
+        generated[0].generationMode = 'similar';
+        generated[0].sourceQuestionId = result.sourceQuestionId;
+      }
       if (!isEdit && questionType === 'MCQ' && generated.length !== 3)
         throw new Error(
           'Three MCQ candidates were not returned. Please retry.',
@@ -360,7 +469,10 @@ export default function Workspace({
       if (id === requestId.current && (e as Error).name !== 'AbortError')
         setError((e as Error).message);
     } finally {
-      if (id === requestId.current) setBusy('');
+      if (id === requestId.current) {
+        setBusy('');
+        abort.current = null;
+      }
     }
   }
   function viewCandidate(index: number) {
@@ -370,6 +482,7 @@ export default function Workspace({
         ? selectQuestion(current, current.activeId, index)
         : current,
     );
+    setApprovalMessage('');
     setCandidateIndex(index);
     setResult(candidates[index]);
     setSolution(0);
@@ -471,10 +584,69 @@ export default function Workspace({
           <span>{dark ? 'Light mode' : 'Dark mode'}</span>
         </Button>
       </header>
-      <div className="workspace">
+      <nav className="app-nav" aria-label="Studio sections">
+        {(
+          [
+            ['generate', 'Generate and refine'],
+            ['repository', 'Approved repository'],
+            ['worksheet', 'Paper assembly'],
+            ['sources', 'Import sources'],
+            ['activity', 'Activity'],
+          ] as const
+        ).map(([id, label]) => (
+          <Button
+            key={id}
+            variant={view === id ? 'default' : 'outline'}
+            aria-current={view === id ? 'page' : undefined}
+            disabled={!!busy}
+            onClick={() => setView(id)}
+          >
+            {label}
+          </Button>
+        ))}
+      </nav>
+      <div
+        style={
+          view === 'repository' || view === 'worksheet'
+            ? undefined
+            : { display: 'none' }
+        }
+      >
+        <Library
+          view={view === 'worksheet' ? 'worksheet' : 'repository'}
+          refresh={repositoryRefresh}
+          modules={modules}
+          onOpen={openRepository}
+          onView={setView}
+        />
+      </div>
+      <div style={view === 'sources' ? undefined : { display: 'none' }}>
+        <SourceImports modules={modules} topics={topics} />
+      </div>
+      {view === 'activity' && <Activity />}
+      <div
+        className="workspace"
+        style={view === 'generate' ? undefined : { display: 'none' }}
+      >
         <aside className="setup">
           <div className="eyebrow">QUESTION BRIEF</div>
           <h1>What question will you generate?</h1>
+          <Choice
+            label="Generation mode"
+            value={generationMode}
+            items={[
+              { id: 'new', name: 'New question from the brief' },
+              { id: 'similar', name: 'Similar question from a source' },
+            ]}
+            onChange={(v) => {
+              if (!busy) setGenerationMode(v as 'new' | 'similar');
+            }}
+          />
+          <p className="hint">
+            {generationMode === 'similar'
+              ? 'Randomly adapt one compatible few-shot example, preserving its main method while changing numbers or context. This creates a separate draft.'
+              : 'Create an original question using your specifications and source examples for guidance.'}
+          </p>
           <fieldset disabled={!!busy || !history}>
             <Choice
               label="Module"
@@ -654,10 +826,64 @@ export default function Workspace({
                 placeholder="For example: two linked parts, use an electrical engineering context…"
               />
             </label>
+            {generationMode === 'similar' &&
+              !referencesLoading &&
+              !configIssues.length && (
+                <details className="source-base-list">
+                  <summary>
+                    Current compatible source examples (
+                    {refs.filter((r) => r.questionType === questionType).length}
+                    )
+                  </summary>
+                  <p className="hint">
+                    One of these examples is selected randomly as the base for
+                    each generated question.
+                  </p>
+                  {refs
+                    .filter((r) => r.questionType === questionType)
+                    .map((r) => (
+                      <p className="hint" key={r.id}>
+                        {r.label}
+                      </p>
+                    ))}
+                  {!refs.some((r) => r.questionType === questionType) && (
+                    <p className="error" role="alert">
+                      No source matches this question type. Choose another topic
+                      or use New question from the brief.
+                    </p>
+                  )}
+                </details>
+              )}
+            {configIssues.length > 0 && (
+              <div className="error" role="alert">
+                <strong>Check the question configuration</strong>
+                {configIssues.map((issue, i) => (
+                  <p key={i}>
+                    {issue.field}: {issue.error} Recommendation:{' '}
+                    {issue.recommendation}
+                  </p>
+                ))}
+              </div>
+            )}
+            {!configIssues.length && referenceError && (
+              <p className="error" role="alert">
+                {referenceError}
+              </p>
+            )}
+            {referencesLoading && !configIssues.length && (
+              <p className="hint" role="status">
+                Checking source examples...
+              </p>
+            )}
             <Button
               className="generate"
               onClick={() => generate()}
               disabled={
+                (generationMode === 'similar' &&
+                  !refs.some((r) => r.questionType === questionType)) ||
+                !!configIssues.length ||
+                referencesLoading ||
+                !!referenceError ||
                 !validMarks ||
                 !validParts ||
                 !brief.subtopics.length ||
@@ -665,10 +891,16 @@ export default function Workspace({
               }
             >
               <ArrowUpRight size={18} />
-              {questionType === 'MCQ' ? 'Generate 3 MCQs' : 'Generate question'}
+              {generationMode === 'similar'
+                ? questionType === 'MCQ'
+                  ? 'Generate 3 similar MCQs'
+                  : 'Generate similar question'
+                : questionType === 'MCQ'
+                  ? 'Generate 3 new MCQs'
+                  : 'Generate new question'}
             </Button>
           </fieldset>
-          {busy && (
+          {busy && abort.current && (
             <Button
               variant="outline"
               className="cancel"
@@ -689,7 +921,7 @@ export default function Workspace({
         <section className="desk">
           <details className="question-history">
             <summary>
-              Session history ·{' '}
+              Drafts this visit ·{' '}
               {history?.batches.reduce(
                 (n, batch) => n + batch.results.length,
                 0,
@@ -697,9 +929,9 @@ export default function Workspace({
               questions
             </summary>
             <p className="hint">
-              Return to any question generated in this tab. Refinements update
-              the same entry. History survives refreshes; export before closing
-              the tab.
+              Working drafts are temporary. Approve questions for the repository
+              to keep them across visits. Refinements here do not change an
+              approved entry until you approve its replacement.
             </p>
             {!history?.batches.length && (
               <p>No questions generated in this session yet.</p>
@@ -793,6 +1025,16 @@ export default function Workspace({
             {d && (
               <div className="export-control">
                 <Button
+                  disabled={!!busy || unchangedApproved}
+                  onClick={approve}
+                >
+                  {unchangedApproved
+                    ? 'Approved in repository'
+                    : binding
+                      ? 'Approve replacement'
+                      : 'Approve for repository'}
+                </Button>
+                <Button
                   className="export-word"
                   onClick={exportWord}
                   disabled={!!busy}
@@ -821,9 +1063,33 @@ export default function Workspace({
                 onClick={() => generate(true)}
               >
                 <RefreshCw size={16} />
-                Apply edits and recheck
+                Refine draft and recheck
               </Button>
             </div>
+          )}
+          {approvalMessage && (
+            <p className="review passed" role="status">
+              {approvalMessage}
+            </p>
+          )}
+          {binding && !unchangedApproved && (
+            <p className="hint">
+              This working draft has changes. The repository still contains
+              approved revision {binding.revision}. Choose “Approve replacement”
+              to publish these changes to the repository.
+            </p>
+          )}
+          {result?.sourceQuestionId && (
+            <p className="hint">
+              Similar-question base:{' '}
+              {result.references.find((r) => r.id === result.sourceQuestionId)
+                ?.label || result.sourceQuestionId}
+            </p>
+          )}
+          {result?.auditWarning && (
+            <p className="error" role="alert">
+              {result.auditWarning}
+            </p>
           )}
           {error && (
             <div role="alert" className="error">
@@ -839,9 +1105,7 @@ export default function Workspace({
               result.effectiveBrief.totalMarks !== result.brief.totalMarks ||
               result.feasibility.specification_adjustments.length > 0) && (
               <div role="alert" className="error">
-                <strong>
-                  Configuration error — adjusted question generated
-                </strong>
+                <strong>Configuration adjustments and recommendations</strong>
                 {result.draft.question_type === 'Structured' &&
                   result.feasibility.omitted_subtopics.map((item) => (
                     <p key={item.id}>
@@ -873,8 +1137,10 @@ export default function Workspace({
                   ),
                 )}
                 <p className="hint">
-                  Adjustments are AI assessments. Review them alongside the
-                  question.
+                  Recommendation: narrow the selected sub-topics, increase the
+                  marks if broader coverage is essential, or revise conflicting
+                  specifications, then generate again. These adjustments are AI
+                  assessments; review them alongside the question.
                 </p>
               </div>
             )}

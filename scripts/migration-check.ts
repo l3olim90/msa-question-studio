@@ -30,6 +30,10 @@ const fixture=path.resolve('test-output/import-fixture-'+Date.now());fs.mkdirSyn
 for(const d of ['data','scripts','imports/staging/fixture/P1/questions','imports/staging/fixture/P1/solutions'])fs.mkdirSync(path.join(fixture,d),{recursive:true});
 const write=(p:string,v:unknown)=>fs.writeFileSync(path.join(fixture,p),JSON.stringify(v));
 const source=JSON.parse(fs.readFileSync('data/bank.json','utf8'));write('data/bank.json',{...source,questions:[source.questions[0]],images:{}});
+assert.doesNotThrow(()=>taxonomySchema.parse({topics:source.topics}));
+const historical=source.topics.find((t:any)=>t.status==='Deprecated'&&!t.syllabus_excerpt);
+assert(historical,'Existing historical taxonomy fixture must be retained.');
+assert.throws(()=>taxonomySchema.parse({topics:[{...historical,status:'Active'}]}),/active topic needs/);
 write('data/modules.json',JSON.parse(fs.readFileSync('data/modules.json','utf8')));write('data/reference-crops.json',{});
 fs.copyFileSync('scripts/pdf_pages.py',path.join(fixture,'scripts/pdf_pages.py'));
 // Build a minimal actual PDF and verify local rendering/text extraction, with no OCR service.

@@ -1,3 +1,4 @@
+import { withBank, referenceImage } from './bank-data';
 import { loadPrompts } from './prompts';
 import { recordPrompt } from './observability';
 import { reviewWithCalculations } from './review-calculations';
@@ -21,6 +22,7 @@ import {
 } from './schema';
 import { retrieve, references } from './retrieval';
 import { calculate } from './calculator';
+import { selectBase, type GenerationOptions } from './similar';
 import katex from 'katex';
 // Hidden structured controls are not part of an MCQ authoring request.
 function authoringBrief(brief: ReturnType<typeof retrieve>['brief']) {
@@ -114,6 +116,7 @@ export function validateDraft(
       throw new Error('The marks do not add up for every solution.');
   for (const text of [
     d.question,
+    d.answer_key,
     ...d.parts.map((p) => p.prompt),
     ...d.options.map((o) => o.text),
     ...d.solutions.flatMap((s) => [
@@ -137,16 +140,26 @@ function readJSON(r: any) {
     );
   return JSON.parse(text);
 }
-export async function generate(
+async function generateInBank(
   key: string,
   raw: unknown,
   previous?: unknown,
   edit = '',
   settings: Partial<Connection> = {},
   candidateContext?: { index: number; prior: Draft[] },
+  options: GenerationOptions = {},
 ) {
-  const prompts = loadPrompts();
-  recordPrompt(prompts.version, prompts.hash);
+  const requested = retrieve(raw);
+  const base = previous
+    ? requested.examples.find((q) => q.question_id === options.sourceQuestionId)
+    : selectBase(requested, options);
+  const generationContext = {
+    generation_mode:
+      base || (previous && options.sourceQuestionId) ? 'similar' : 'new',
+    base_reference: base ? promptExamples([base])[0] : null,
+  };
+  const prompts = loadPrompts(requested.brief.module);
+  await recordPrompt(prompts.version, prompts.hash, requested.brief.module);
   const structuredTargetContract = prompts.text.structured_contract;
   const connection = {
     ...connectionSchema.parse(settings),
@@ -154,7 +167,6 @@ export async function generate(
   };
   const response = (key: string, body: any) =>
     providerResponse(key, body, connection);
-  const requested = retrieve(raw);
   let ctx = requested;
   let refs = references(ctx);
   const calcLog: { expression: string; result: string }[] = [];
@@ -167,7 +179,11 @@ export async function generate(
     ' ' +
     structuredTargetContract +
     ' ' +
-    prompts.text.author;
+    prompts.text.author +
+    ' ' +
+    prompts.moduleContext +
+    ' ' +
+    prompts.text.similar;
   let input: any[] = [
     {
       role: 'user',
@@ -175,6 +191,7 @@ export async function generate(
         {
           type: 'input_text',
           text: JSON.stringify({
+            ...generationContext,
             user_instructions: prompts.text.user_context,
             candidate_context: candidateContext
               ? {
@@ -200,7 +217,7 @@ export async function generate(
             edit: edit.slice(0, 3000),
           }),
         },
-        ...refs.flatMap((ref) =>
+        ...(await Promise.all(refs.map(async (ref) => ({...ref, images: await Promise.all(ref.images.map(async img => ({...img, url: await referenceImage(img.name, img.url)})))})))).flatMap((ref) =>
           ref.images.flatMap((img) => [
             {
               type: 'input_text',
@@ -212,10 +229,16 @@ export async function generate(
       ],
     },
   ];
-  const planInstructions = prompts.text.planner;
+  const planInstructions =
+    prompts.text.planner +
+    ' ' +
+    prompts.moduleContext +
+    ' ' +
+    prompts.text.similar;
   const planBody = {
     instructions: planInstructions,
     input: JSON.stringify({
+      ...generationContext,
       user_instructions: prompts.text.user_context,
       brief: authoringBrief(ctx.brief),
       edit,
@@ -278,6 +301,9 @@ export async function generate(
     totalMarks: feasibility.total_marks,
     specifications: feasibility.resolved_specifications,
   });
+  // Planning can narrow coverage; preserve the originally selected base and its diagrams.
+  if (base && !ctx.examples.some((q) => q.question_id === base.question_id))
+    ctx.examples = [base, ...ctx.examples].slice(0, 6);
   refs = references(ctx);
   input = [
     {
@@ -286,6 +312,7 @@ export async function generate(
         {
           type: 'input_text',
           text: JSON.stringify({
+            ...generationContext,
             user_instructions: prompts.text.user_context,
             candidate_context: candidateContext
               ? {
@@ -312,7 +339,7 @@ export async function generate(
             configuration_adjustments: feasibility,
           }),
         },
-        ...refs.flatMap((ref) =>
+        ...(await Promise.all(refs.map(async (ref) => ({...ref, images: await Promise.all(ref.images.map(async img => ({...img, url: await referenceImage(img.name, img.url)})))})))).flatMap((ref) =>
           ref.images.flatMap((img) => [
             {
               type: 'input_text',
@@ -326,7 +353,7 @@ export async function generate(
   ];
   const format = {
     type: 'json_schema',
-    name: 'em1_question',
+    name: 'module_question',
     strict: true,
     schema: jsonSchema(draftSchema),
   };
@@ -446,12 +473,31 @@ export async function generate(
     });
     draft = await validateAuthored(readJSON(r));
   }
+  if (
+    base &&
+    draft.question.replace(/\s+/g, ' ').trim() ===
+      base.question.replace(/\s+/g, ' ').trim()
+  )
+    throw new DraftReviewError(
+      'The similar question repeated its source. Retry to generate a fresh variation.',
+    );
+  if (!draft.answer_key.trim())
+    throw new DraftReviewError(
+      'The generated question is missing its answer key. Retry to generate a complete question.',
+    );
   let currentCalculations: { expression: string; result: string }[] = [];
   const reviewDraft = async () => {
     const reviewed = await reviewWithCalculations(
       (body) => response(key, body),
       {
-        instructions: prompts.text.review + ' ' + structuredTargetContract,
+        instructions:
+          prompts.text.review +
+          ' ' +
+          structuredTargetContract +
+          ' ' +
+          prompts.moduleContext +
+          ' ' +
+          prompts.text.similar,
         input: JSON.stringify({
           candidate_context: candidateContext
             ? {
@@ -463,6 +509,7 @@ export async function generate(
               }
             : null,
           brief: authoringBrief(ctx.brief),
+          ...generationContext,
           requested_brief: authoringBrief(requested.brief),
           configuration_plan: feasibility,
           reference_examples: promptExamples(ctx.examples),
@@ -553,8 +600,28 @@ export async function generate(
         review.issues.slice(0, 3).join(' '),
     );
 
+  if (!draft.answer_key.trim())
+    throw new DraftReviewError(
+      'The revised question is missing its answer key. Retry to generate a complete question.',
+    );
+
+  if (
+    base &&
+    draft.question.replace(/\s+/g, ' ').trim() ===
+      base.question.replace(/\s+/g, ' ').trim()
+  )
+    throw new DraftReviewError(
+      'The similar question repeated its source. Retry to generate a fresh variation.',
+    );
+
   return {
     draft,
+    generationMode: (base || (previous && options.sourceQuestionId)
+      ? 'similar'
+      : 'new') as 'new' | 'similar',
+    sourceQuestionId:
+      base?.question_id || (previous ? options.sourceQuestionId : undefined),
+    promptModule: prompts.module,
     promptVersion: prompts.version,
     promptHash: prompts.hash,
     references: refs,
@@ -623,3 +690,5 @@ export function promptExamples(rows: ReturnType<typeof retrieve>['examples']) {
     subtopics: [q.subtopic_id, ...q.additional_subtopic_ids_json],
   }));
 }
+
+export function generate(...args: Parameters<typeof generateInBank>) { return withBank(() => generateInBank(...args)); }

@@ -1,5 +1,38 @@
 # Migration validation
 
+## Supabase and Vercel preparation: 18 September 2026
+
+Configured the connected Supabase project with a private `studio` schema and `studio-sources` bucket, then seeded the existing EM1 module, 55 taxonomy records, 128 source questions and 140 source asset entries. No local SQLite database existed at the configured default path to migrate. The local app now selects Supabase storage; the original JSON source files remain unchanged.
+
+TypeScript, the full standard regression suite, focused cloud-file lint and the Vercel production build passed. Standard tests force isolated local storage. Explicit live checks verified private schema/bucket permissions, source image downloads and signed links, PostgreSQL approval/search/deletion, concurrent replacement conflicts, traces/token usage/redaction, and shared generation capacity. The connection-pooling check exposed pipelining hangs; independent queries now reserve a connection and concurrent repository operations pass. Active taxonomy still requires a grounded excerpt; empty excerpts on existing deprecated historical tags no longer prevent source imports.
+
+A synthetic PDF pair completed direct signed upload, real Azure extraction, persisted review, stale-review rejection, leased worker approval and cloud source promotion. Its temporary repository/import/source fixtures were removed afterward. Provider extraction traces remain as audit evidence. This checks one small pair, not exhaustive OCR/transcription accuracy or large-paper performance.
+
+The built Vercel function was invoked locally with production settings: unauthenticated home returned 401; authenticated home, repository, imports, traces, references and private image access passed. A real Azure similar Structured generation through that function returned 200 with a passing review. No Vercel-hosted URL has yet been deployed or checked. Browser automation exposed no browser, so interactive cloud UI verification remains outstanding. Existing Word render checks below apply to the unchanged export layout.
+
+Deployment instructions and an opt-in GitHub Actions import worker are included. The worker schedule is disabled until `ENABLE_PDF_WORKER=true` is configured in the repository variables. No automatic Vercel deployment or GitHub secret configuration was performed.
+
+The final credential scan found no configured server credentials in 245 Git-visible files or 1,621 Vercel build files. Public source scans were excluded from the static build output. `.env` and `.env.vercel` are ignored by Git. `git diff --check` passed; the bank, module registry and crop manifest are unchanged. The live cloud cleanup check returned 128 source questions, zero test repository entries and zero test import jobs.
+
+## Local repository, worksheets and imports: 18 September 2026
+
+Implemented similar-question generation, local SQLite traces and approved revisions, module-qualified prompts, actionable configuration validation, paper assembly, and browser PDF upload/review. Student worksheets always include an answer key; lecturer exports additionally include all worked solutions and marking allocations.
+
+Validated on Windows with Node 24.14.1. `pnpm typecheck`, the complete `pnpm test` suite, `pnpm build`, focused lint for the new feature files, and `git diff --check` passed. `pnpm bank validate` reports 128 valid questions. The production bank, module registry and crop manifest were unchanged by these tests.
+
+- Database/API tests cover explicit approval, immutable revisions, refinement without changing the approved copy, replacement/deletion conflicts, deletion exclusion, persistence after reopening and in a separate Node process, authentication, and rejection of stale worksheet selections.
+- Local audit tests cover concurrent trace isolation, per-call provider/model/usage, errors, prompt identity, credential/image/reasoning redaction, content opt-out, and absence of telemetry network calls.
+- Generation tests cover compatible random source selection, a fixed source through planning/authoring/review, preserved refinement provenance, configuration recommendations, module prompt inheritance/hashes, and rejection of a repair that removes the answer key. Existing MCQ, calculator, scope, format and repair regressions also pass.
+- Import tests cover multipart validation, path containment, preserved extraction coverage, approval gates, transient retries, nested LaTeX marking JSON, standalone question grouping, and isolated EM2 promotion with real PDF rendering/cropping and backups.
+
+Live HTTP checks used an isolated SQLite database under ignored `test-output/browser-qa/`. One Azure similar Structured question passed review, recorded its source and current calculator checks, and was approved/reopened/assembled in that test database. Its local trace contains nine provider calls. A synthetic question/solution PDF pair completed upload, local PDF processing, real provider extraction and saved review; retry from stored PDFs was exercised. The synthetic paper remains unapproved and was not committed to the production source bank. These are individual live checks, not exhaustive provider/topic coverage.
+
+Both worksheet variants were exported and rendered using the documents renderer with LibreOffice, its Math component and Poppler in an isolated Docker container. Every page was visually inspected: two student pages and three lecturer pages, including equations, filled editable diagrams, section headings, Name/Class fields, instructions, the AI disclosure, the answer key and worked solutions. XML checks separately confirm editable geometry and native equations. Native Microsoft Word automation did not complete, so this is LibreOffice render validation rather than Microsoft Word visual validation.
+
+The browser automation service exposed no available browser, so interactive browser flows remain unverified. The HTTP home page and APIs were checked; TypeScript and the production bundle passed. No deployment or Git push was performed. The existing Langfuse Docker services were left running; the application no longer sends Langfuse telemetry.
+
+Reproduce with the commands above after installing `requirements-import.txt`. The feature suite writes the latest fixture path to `test-output/latest-feature-fixtures.json`. Live provider checks require configured credentials and incur provider charges; the standard automated suite uses mocked provider responses.
+
 ## Follow-up: stale related-rate calculation history
 
 Separated exploratory authoring history from current-draft review calculations and enabled bounded calculator access during independent review. Each revision starts a fresh ledger; failed expressions never enter the successful-check list. Regression tests evaluated `(0.045*pi)/(pi*6^2/4)` as 0.005 and `(0.045*pi)/(pi*9^2/4)` as 1/450, excluded a failed comma expression and verified the tool-round limit. TypeScript and build passed.

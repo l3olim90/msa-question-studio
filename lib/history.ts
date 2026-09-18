@@ -14,6 +14,8 @@ const referenceSchema = z.object({
   marking: z.unknown(),
   images: z.array(z.object({ name: z.string(), url: z.string() })),
   match: z.string(),
+  questionType: z.enum(['MCQ', 'Structured']).optional(),
+  alternativeMarking: z.array(z.unknown()).optional(),
 });
 export const resultSchema = z.object({
   manual: z.boolean().optional(),
@@ -21,6 +23,8 @@ export const resultSchema = z.object({
   references: z.array(referenceSchema),
   review: z.object({
     passed: z.boolean(),
+    scope_passed: z.boolean().optional(),
+    format_passed: z.boolean().optional(),
     issues: z.array(z.string()),
     summary: z.string(),
   }),
@@ -33,6 +37,17 @@ export const resultSchema = z.object({
   feasibility: feasibilitySchema,
   promptVersion: z.string().optional(),
   promptHash: z.string().optional(),
+  promptModule: z.string().optional(),
+  traceId: z.string().optional(),
+  auditWarning: z.string().optional(),
+  generationMode: z.enum(['new', 'similar']).optional(),
+  sourceQuestionId: z.string().optional(),
+  provider: z.string().optional(),
+  model: z.string().optional(),
+  reasoning: z.string().optional(),
+  calculationHistory: z
+    .array(z.object({ expression: z.string(), result: z.string() }))
+    .optional(),
 });
 export type Result = z.infer<typeof resultSchema>;
 export type Ref = Result['references'][number];

@@ -1,7 +1,12 @@
 import {z} from 'zod';
+import {parseSourceMarking} from './source-marking';
 const id=z.string().regex(/^[A-Za-z0-9_.-]{1,100}$/);
 export const moduleSchema=z.object({id:z.string().regex(/^[A-Z][A-Z0-9_-]{0,19}$/),name:z.string().min(1),notation:z.string().min(1)});
-export const topicSchema=z.object({taxonomy_id:id,module_id:z.string(),parent_id:z.string(),level:z.enum(['Topic','Sub-topic']),name:z.string().min(1),syllabus_excerpt:z.string().min(10),status:z.enum(['Active','Deprecated']).default('Active')});
+export const topicSchema=z.object({taxonomy_id:id,module_id:z.string(),parent_id:z.string(),level:z.enum(['Topic','Sub-topic']),name:z.string().min(1),syllabus_excerpt:z.string(),status:z.enum(['Active','Deprecated']).default('Active')}).superRefine((topic,ctx)=>{
+ // Historical tags can be retained without current syllabus text. Active tags
+ // still require grounded scope before they can be used for an import.
+ if(topic.status==='Active'&&topic.syllabus_excerpt.trim().length<10)ctx.addIssue({code:'custom',path:['syllabus_excerpt'],message:'An active topic needs a syllabus excerpt of at least 10 characters.'});
+});
 export const taxonomySchema=z.object({topics:z.array(topicSchema).min(1)});
 export const taxonomyChunkSchema=z.object({topics:z.array(topicSchema)});
 export const extractedSchema=z.object({questions:z.array(z.object({
@@ -23,5 +28,5 @@ export function validateExtracted(q:z.infer<typeof extractedSchema>['questions']
  if(!topic||!topics.some(t=>t.taxonomy_id===q.subtopic_id&&t.parent_id===topic.taxonomy_id&&t.status==='Active')||!q.additional_subtopic_ids.every(id=>topics.some(t=>t.taxonomy_id===id&&t.level==='Sub-topic'&&t.module_id===topic.module_id&&t.status==='Active')))throw new Error('Question has invalid or inactive topic tags.');
  for(const c of q.question_crops)if(c.page>questionPages||c.box[0]>=c.box[2]||c.box[1]>=c.box[3])throw new Error('Invalid question crop or page.');
  if(q.solution_pages.some(p=>p>solutionPages))throw new Error('Invalid solution page.');
- for(const value of [q.marking_json,...q.alternatives.map(a=>a.marking_json)]){const parsed=JSON.parse(value);if(parsed!==null&&(typeof parsed!=='object'||Array.isArray(parsed)))throw new Error('Marking JSON must be an object or null.');}
+ for(const value of [q.marking_json,...q.alternatives.map(a=>a.marking_json)])parseSourceMarking(value);
 }

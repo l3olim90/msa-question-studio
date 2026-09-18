@@ -2,7 +2,8 @@ import { ServiceResponseError } from '@/lib/service-response';
 import { generate } from '@/lib/generation';
 import { generateMcqCandidates } from '@/lib/candidates';
 import { serverConfig } from '@/lib/server-config';
-import { readBody, generationSlot, HttpError, apiError } from '@/lib/security';
+import { readBody, HttpError, apiError } from '@/lib/security';
+import { acquireGenerationSlot } from '@/lib/generation-slot';
 import { z } from 'zod';
 import { auditGeneration } from '@/lib/observability';
 const payload = z
@@ -10,6 +11,9 @@ const payload = z
     brief: z.unknown(),
     previous: z.unknown().optional(),
     edit: z.string().max(3000).optional(),
+    mode: z.enum(['new', 'similar']).default('new'),
+    sourceIds: z.array(z.string().max(100)).max(6).optional(),
+    sourceQuestionId: z.string().min(1).max(100).optional(),
     sessionId: z.uuid().optional(),
     questionId: z
       .string()
@@ -18,9 +22,14 @@ const payload = z
   })
   .strict();
 export async function POST(request: Request) {
-  let release: (() => void) | undefined;
+  let release: (() => Promise<void>) | undefined;
   try {
     const body = payload.parse(await readBody(request));
+    if (body.previous && body.mode === 'similar')
+      throw new HttpError(
+        422,
+        'Use Refine draft to change a displayed question. Generate similar starts a separate draft from source examples.',
+      );
     const configured = serverConfig();
     const key = configured.key.trim();
     if (!key || key.length > 500)
@@ -29,19 +38,48 @@ export async function POST(request: Request) {
         'Configure the selected provider API key in the server .env file and restart the app.',
       );
     const connection = configured.connection;
-    release = generationSlot();
+    release = await acquireGenerationSlot();
     const brief = body.brief as any;
     return Response.json(
       await auditGeneration(
         {
           sessionId: body.sessionId,
           questionId: body.questionId,
-          operation: body.previous ? 'refine' : 'generate',
+          operation: body.previous
+            ? 'refine'
+            : body.mode === 'similar'
+              ? 'similar'
+              : 'generate',
+          input: {
+            brief: body.brief,
+            previous: body.previous,
+            edit: body.edit,
+            mode: body.mode,
+            sourceIds: body.sourceIds,
+            sourceQuestionId: body.sourceQuestionId,
+          },
         },
         async () =>
           brief?.questionType === 'MCQ' && !body.previous
-            ? await generateMcqCandidates(key, brief, connection)
-            : await generate(key, brief, body.previous, body.edit, connection),
+            ? await generateMcqCandidates(key, brief, connection, {
+                mode: body.mode,
+                sourceIds: body.sourceIds,
+              })
+            : await generate(
+                key,
+                brief,
+                body.previous,
+                body.edit,
+                connection,
+                undefined,
+                {
+                  mode: body.mode,
+                  sourceIds: body.sourceIds,
+                  sourceQuestionId: body.previous
+                    ? body.sourceQuestionId
+                    : undefined,
+                },
+              ),
       ),
       { headers: { 'Cache-Control': 'no-store' } },
     );
@@ -59,6 +97,6 @@ export async function POST(request: Request) {
       );
     return apiError(e);
   } finally {
-    release?.();
+    try { await release?.(); } catch { console.warn('Could not release the generation lease; it will expire automatically.'); }
   }
 }

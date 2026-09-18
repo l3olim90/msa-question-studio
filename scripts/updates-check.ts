@@ -13,11 +13,6 @@ import {
   selectQuestion,
   resultSchema,
 } from '../lib/history';
-import {
-  auditGeneration,
-  auditProvider,
-  recordPrompt,
-} from '../lib/observability';
 import { APP_VERSION } from '../lib/version';
 
 const shape = {
@@ -199,7 +194,10 @@ assert.throws(() =>
 );
 assert.throws(() => readHistory(JSON.stringify({ ...history, version: 2 })));
 const prompts = loadPrompts();
-assert.match(prompts.version, /^\d{4}-\d{2}-\d{2}$/);
+assert.match(
+  prompts.version,
+  /^EM1@\d{4}-\d{2}-\d{2}\+shared@\d{4}-\d{2}-\d{2}$/,
+);
 assert(prompts.text.author.includes('\\[...\\]'));
 assert(prompts.text.author.includes('2x\\,\\mathrm{cm}'));
 const source = fs.readFileSync('PROMPTS.md', 'utf8');
@@ -211,157 +209,15 @@ assert.throws(() =>
 );
 assert.throws(() =>
   parsePrompts(
-    source.replace(`Version: ${prompts.version}`, 'Version: 2026-02-30'),
+    source.replace(`Version: ${prompts.sharedVersion}`, 'Version: 2026-02-30'),
   ),
 );
 assert.notEqual(
   parsePrompts(source.replace('You author module', 'You create module')).hash,
-  prompts.hash,
+  parsePrompts(source).hash,
 );
 for (const path of ['README.md', 'DOCUMENTATION.md'])
   assert(fs.readFileSync(path, 'utf8').includes(`Version: ${APP_VERSION}`));
 console.log(
   'PASS: editable filled geometry and visible AI notice; session history restore/refinement/count; live prompt configuration and release dates.',
 );
-
-const env = { ...process.env },
-  originalFetch = globalThis.fetch,
-  originalWarn = console.warn;
-type TestSpan = {
-  traceId: string;
-  spanId: string;
-  parentSpanId?: string;
-  status: { code: number };
-  attributes: { key: string; value: { stringValue: string } }[];
-};
-type TestBatch = { resourceSpans: { scopeSpans: { spans: TestSpan[] }[] }[] };
-const batches: TestBatch[] = [],
-  warnings: string[] = [];
-try {
-  process.env.LANGFUSE_ENABLED = 'false';
-  globalThis.fetch = async () => {
-    throw new Error('disabled tracing must not use the network');
-  };
-  assert.equal(
-    await auditGeneration({ operation: 'generate' }, async () => 7),
-    7,
-  );
-  process.env.LANGFUSE_ENABLED = 'true';
-  process.env.LANGFUSE_PUBLIC_KEY = 'fixture-public-key';
-  process.env.LANGFUSE_SECRET_KEY = 'fixture-secret-key';
-  process.env.LANGFUSE_BASE_URL = 'https://langfuse.example';
-  process.env.LANGFUSE_CAPTURE_CONTENT = 'false';
-  console.warn = (message) => {
-    warnings.push(String(message));
-  };
-  globalThis.fetch = async (url, init) => {
-    assert.equal(url, 'https://langfuse.example/api/public/otel/v1/traces');
-    assert.equal(init?.redirect, 'manual');
-    assert.equal(
-      new Headers(init?.headers).get('x-langfuse-ingestion-version'),
-      '4',
-    );
-    assert.equal(typeof init?.body, 'string');
-    batches.push(JSON.parse(init!.body as string));
-    return Response.json({});
-  };
-  const call = () =>
-    auditProvider(
-      {
-        instructions: 'Private prompt',
-        input: [
-          { type: 'reasoning', encrypted_content: 'hidden-reasoning' },
-          { type: 'input_image', image_url: 'private-image' },
-          { role: 'user', content: 'Private question fixture-secret-key' },
-        ],
-        text: { format: { name: 'review' } },
-      },
-      'openai',
-      'fixture-model',
-      async () => ({
-        output: [{ type: 'output_text', text: 'Private answer' }],
-        usage: {
-          input_tokens: 100,
-          output_tokens: 25,
-          input_tokens_details: { cached_tokens: 20 },
-        },
-      }),
-    );
-  await Promise.all(
-    [history.sessionId, crypto.randomUUID()].map((sessionId) =>
-      auditGeneration({ operation: 'generate', sessionId }, async () => {
-        recordPrompt(prompts.version, prompts.hash);
-        await call();
-        return result;
-      }),
-    ),
-  );
-  const spans = batches[0].resourceSpans[0].scopeSpans[0].spans;
-  const attrs = Object.fromEntries(
-    spans[1].attributes.map((a) => [a.key, a.value.stringValue]),
-  );
-  assert.equal(spans[1].parentSpanId, spans[0].spanId);
-  assert.equal(spans[1].traceId, spans[0].traceId);
-  assert.notEqual(
-    spans[0].traceId,
-    batches[1].resourceSpans[0].scopeSpans[0].spans[0].traceId,
-  );
-  assert.equal(attrs['langfuse.trace.metadata.prompt_hash'], prompts.hash);
-  assert.deepEqual(JSON.parse(attrs['langfuse.observation.usage_details']), {
-    input: 80,
-    output: 25,
-    input_cache_read: 20,
-  });
-  assert(!JSON.stringify(batches).includes('Private'));
-  process.env.LANGFUSE_CAPTURE_CONTENT = 'true';
-  await auditGeneration({ operation: 'refine' }, async () => {
-    await call();
-    return result;
-  });
-  const captured = JSON.stringify(batches.at(-1));
-  assert(captured.includes('Private prompt'));
-  for (const secret of [
-    'fixture-secret-key',
-    'hidden-reasoning',
-    'private-image',
-  ])
-    assert(!captured.includes(secret));
-  const expected = new Error('Provider failure');
-  await assert.rejects(
-    auditGeneration({ operation: 'generate' }, () =>
-      auditProvider({}, 'azure', 'model', async () => {
-        throw expected;
-      }),
-    ),
-    (e) => e === expected,
-  );
-  assert(
-    batches
-      .at(-1)!
-      .resourceSpans[0].scopeSpans[0].spans.every((s) => s.status.code === 2),
-  );
-  globalThis.fetch = async () => {
-    throw new Error('offline');
-  };
-  assert.equal(
-    await auditGeneration({ operation: 'generate' }, async () => result),
-    result,
-  );
-  globalThis.fetch = async () =>
-    Response.json({ partialSuccess: { rejectedSpans: '1' } });
-  assert.equal(
-    await auditGeneration({ operation: 'generate' }, async () => result),
-    result,
-  );
-  assert.equal(warnings.length, 2);
-  assert(!warnings.join().includes('fixture-secret-key'));
-  console.log(
-    'PASS: optional Langfuse OTLP traces, concurrent session isolation, usage, prompt identity, content opt-in/redaction and failure isolation. No live telemetry sent.',
-  );
-} finally {
-  globalThis.fetch = originalFetch;
-  console.warn = originalWarn;
-  for (const key of Object.keys(process.env))
-    if (!(key in env)) delete process.env[key];
-  Object.assign(process.env, env);
-}

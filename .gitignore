@@ -14,6 +14,8 @@
 # next.js
 /.next/
 /.vinext/
+/.output/
+/.nitro/
 /out/
 
 # misc
@@ -50,3 +52,10 @@ next-env.d.ts
 /imports/backups/
 /scripts/*.mjs
 !scripts/run.mjs
+!scripts/vercel-build.mjs
+
+# Local databases and SQLite sidecar files
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
