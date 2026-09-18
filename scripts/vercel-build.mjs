@@ -7,6 +7,10 @@ import {
   rmSync,
 } from 'node:fs';
 import { resolve, join, sep } from 'node:path';
+// Vercel auto-builds root middleware separately, outside Vite's aliases and
+// Node runtime. Authentication belongs to Vinext's proxy.ts server entry.
+if (['middleware.ts', 'middleware.js'].some((file) => existsSync(file)))
+  throw new Error('Use proxy.ts for Vinext authentication; root middleware files create incompatible Vercel routing middleware.');
 const result = spawnSync(
   process.execPath,
   ['node_modules/vite/bin/vite.js', 'build'],

@@ -1,5 +1,11 @@
 # Migration validation
 
+## Vercel routing middleware correction: 18 September 2026
+
+The first hosted deployment reported `MIDDLEWARE_INVOCATION_FAILED`. The root `middleware.ts` collided with Vercel's automatic Other-framework routing middleware discovery, outside Vinext's aliases and Node server. Moved the unchanged authentication and security-header behavior to Vinext's `proxy.ts` convention. The build now rejects root middleware files to prevent this deployment conflict.
+
+TypeScript, focused lint and the Vercel build passed. A negative build check confirmed that a root middleware collision fails before compilation. The built Node function returned 401 without login and 200 for authenticated home/repository/imports/traces/references; signed source images were accessible. Hosted runtime confirmation still requires opening the new deployment through Vercel's sign-in protection. The old deployment-specific URL retains its old build.
+
 ## Supabase and Vercel preparation: 18 September 2026
 
 Configured the connected Supabase project with a private `studio` schema and `studio-sources` bucket, then seeded the existing EM1 module, 55 taxonomy records, 128 source questions and 140 source asset entries. No local SQLite database existed at the configured default path to migrate. The local app now selects Supabase storage; the original JSON source files remain unchanged.

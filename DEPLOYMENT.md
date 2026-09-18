@@ -50,6 +50,8 @@ Commit and push the application changes, excluding `.env`, databases, uploads an
 
 `vercel.json` supplies the build configuration. Vinext and Nitro generate Vercel's `.vercel/output` Build Output API package, including server functions and module prompt files. This is a Vinext app, so do not select the Next.js framework preset. The adapter is pinned to a beta release; validate before upgrading it.
 
+Authentication is implemented in the root `proxy.ts`, which Vinext bundles inside its Node server. Do not rename it to `middleware.ts` or add a Vercel `proxy.entrypoint`: those cause Vercel to build separate platform routing middleware outside the app's Vite aliases and runtime. The build rejects root middleware files to catch this conflict before deployment.
+
 Add the cloud, login and active provider variables from step 1 to Vercel's **Environment Variables** before deploying. Do not use `STUDIO_DB_PATH` or the local Python path. Set `STUDIO_STORAGE=supabase`. Environment changes require a new deployment. Set production credentials for Production; connect Preview deployments only if you intend them to share the live repository, or use a separate Supabase project for previews.
 
 For this setup, an ignored `.env.vercel` file has been prepared containing only the deployment variables. Use Vercel's environment-variable import/paste control to transfer it privately. It contains real credentials and must stay out of Git. Regenerate or update it if credentials change. The generated app login password is the `APP_PASSWORD` value in `.env`; the default username is `studio`.
