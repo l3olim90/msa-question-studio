@@ -25,6 +25,7 @@ import { svgDiagram } from '@/lib/diagram';
 import { type Brief } from '@/lib/schema';
 import { APP_VERSION } from '@/lib/version';
 import { configurationIssues } from '@/lib/configuration';
+import { referenceRequest } from '@/lib/reference-request';
 import { studioApi } from '@/lib/client-api';
 import type { RepositoryEntry } from '@/lib/repository';
 import { Library } from './library';
@@ -314,52 +315,60 @@ export default function Workspace({
     subOptions.length > 0 && subOptions.every((t) => subs.includes(t.id));
   const requestId = useRef(0);
   const abort = useRef<AbortController | null>(null);
+  const referenceCache = useRef(new Map<string, {at: number; references: Ref[]; exactExamples: number}>());
+  const [referenceRetry, setReferenceRetry] = useState(0);
+  const referenceKey = referenceRequest(brief);
   useEffect(() => {
     const controller = new AbortController();
+    const cached = referenceCache.current.get(referenceKey);
+    if (cached && Date.now() - cached.at < 60000) {
+      setRefs(cached.references);
+      setExact(cached.exactExamples);
+      setReferencesLoading(false);
+      setReferenceError('');
+      return;
+    }
     setReferencesLoading(true);
     setReferenceError('');
     setRefs([]);
+    let deadline: ReturnType<typeof setTimeout> | undefined;
     const timer = setTimeout(() => {
+      deadline = setTimeout(() => {
+        controller.abort();
+        setReferencesLoading(false);
+        setReferenceError('The source check took too long. Please retry. Your selections have been kept.');
+      }, 20000);
       fetch('/api/references', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(brief),
+        body: referenceKey,
         signal: controller.signal,
       })
         .then(async (r) => {
           const d: any = await readServiceJSON(r, 'Reference retrieval');
           if (!r.ok) throw new Error(d.error);
+          if (controller.signal.aborted) return;
+          if (referenceCache.current.size >= 30) referenceCache.current.delete(referenceCache.current.keys().next().value!);
+          referenceCache.current.set(referenceKey, {...d, at: Date.now()});
           setRefs(d.references);
           setExact(d.exactExamples);
           setReferencesLoading(false);
         })
         .catch((e) => {
-          if (e.name !== 'AbortError') {
+          if (!controller.signal.aborted && e.name !== 'AbortError') {
             setRefs([]);
             setExact(0);
             setReferenceError(e.message);
             setReferencesLoading(false);
           }
-        });
+        }).finally(() => clearTimeout(deadline));
     }, 350);
     return () => {
       clearTimeout(timer);
+      clearTimeout(deadline);
       controller.abort();
     };
-  }, [
-    module,
-    topic,
-    subs,
-    difficulty,
-    spec,
-    marks,
-    questionType,
-    generationMode,
-    creative,
-    multiple,
-    partCount,
-    autoParts,
-  ]);
+  }, [referenceKey, referenceRetry]);
   useEffect(() => {
     setError('');
   }, [
@@ -616,9 +625,11 @@ export default function Workspace({
         }
       >
         <Library
+          active={view === 'repository' || view === 'worksheet'}
           view={view === 'worksheet' ? 'worksheet' : 'repository'}
           refresh={repositoryRefresh}
           modules={modules}
+          topics={topics}
           onOpen={openRepository}
           onView={setView}
         />
@@ -869,9 +880,10 @@ export default function Workspace({
               </div>
             )}
             {!configIssues.length && referenceError && (
-              <p className="error" role="alert">
+              <div className="error" role="alert">
                 {referenceError}
-              </p>
+                <Button variant="outline" onClick={() => setReferenceRetry(n => n + 1)}>Retry source check</Button>
+              </div>
             )}
             {referencesLoading && !configIssues.length && (
               <p className="hint" role="status">

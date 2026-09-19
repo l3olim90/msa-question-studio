@@ -34,6 +34,10 @@ export function database() {
         'This database needs a newer version of Question Studio.',
       );
     db.exec(`
+      CREATE TABLE IF NOT EXISTS worksheet_configs (
+        id TEXT PRIMARY KEY, title TEXT NOT NULL, revision INTEGER NOT NULL,
+        config_json TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS repository_questions (
         id TEXT PRIMARY KEY, module TEXT NOT NULL, topic TEXT NOT NULL,
         question_type TEXT NOT NULL, title TEXT NOT NULL, marks REAL NOT NULL,

@@ -37,8 +37,7 @@ export function worksheetDocument(
   if (paper.instructions.trim())
     body +=
       paragraph('Instructions', 'Heading1') + paragraph(paper.instructions);
-  const answers: string[] = [],
-    solutions: string[] = [];
+  const answers: string[] = [];
   for (const section of paper.sections) {
     body += paragraph(section.name, 'Heading1');
     for (const entry of section.questions) {
@@ -95,10 +94,7 @@ export function worksheetDocument(
               : d.answer_key || d.solutions[0].content,
           ),
       );
-      solutions.push(
-        paragraph(`Question ${index + 1}`, 'Heading1') +
-          document.slice(solutionStart, end),
-      );
+      if (lecturer) body += document.slice(solutionStart, end);
       index++;
     }
   }
@@ -106,11 +102,6 @@ export function worksheetDocument(
     '<w:p><w:r><w:br w:type="page"/></w:r></w:p>' +
     paragraph('Answer key', 'Heading1') +
     answers.join('');
-  if (lecturer)
-    body +=
-      '<w:p><w:r><w:br w:type="page"/></w:r></w:p>' +
-      paragraph('Full worked solutions', 'Heading1') +
-      solutions.join('');
   return packageDocument(body, files, rels);
 }
 const mathRun = (t: string) =>

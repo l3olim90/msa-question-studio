@@ -48,12 +48,21 @@ export const assetUrl = (name: string) =>
   '/api/source-assets?name=' + encodeURIComponent(name);
 export async function loadCloudBank(): Promise<Snapshot> {
   const sql = postgresConnection();
-  const [modules, topics, questions, assets] = await Promise.all([
-    sql`SELECT data FROM studio.modules ORDER BY id`,
-    sql`SELECT data FROM studio.topics ORDER BY id`,
-    sql`SELECT id,data,crops FROM studio.source_questions ORDER BY id`,
-    sql`SELECT name,path,mime FROM studio.source_assets`,
-  ]);
+  // One round trip: Supavisor operations reserve a single connection, so four
+  // separate queries here used to queue even inside Promise.all.
+  const [rows] = await sql`SELECT
+    (SELECT coalesce(json_agg(m ORDER BY id), '[]') FROM (SELECT id,data FROM studio.modules) m) AS modules,
+    (SELECT coalesce(json_agg(t ORDER BY id), '[]') FROM (SELECT id,data FROM studio.topics) t) AS topics,
+    (SELECT coalesce(json_agg(q ORDER BY id), '[]') FROM (SELECT id,data,crops FROM studio.source_questions) q) AS questions,
+    (SELECT coalesce(json_agg(a), '[]') FROM (SELECT name,path,mime FROM studio.source_assets) a) AS assets`;
+  const modules = rows.modules as { data: (typeof moduleType)[number] }[];
+  const topics = rows.topics as { data: (typeof bankType.topics)[number] }[];
+  const questions = rows.questions as {
+    id: string;
+    data: (typeof bankType.questions)[number];
+    crops: Snapshot['crops'][string];
+  }[];
+  const assets = rows.assets as { name: string; path: string; mime: string }[];
   if (!modules.length || !questions.length)
     throw new Error('The Supabase source bank is empty. Run pnpm cloud seed.');
   const paths = new Map(
@@ -80,7 +89,7 @@ export async function loadCloudBank(): Promise<Snapshot> {
 }
 export async function withBank<T>(run: () => T | Promise<T>): Promise<T> {
   if (!cloudEnabled() || currentBank.getStore()) return run();
-  if (!cloudSnapshot || Date.now() - cloudSnapshot.at > 15000)
+  if (!cloudSnapshot || Date.now() - cloudSnapshot.at > 60000)
     cloudSnapshot = { at: Date.now(), value: loadCloudBank() };
   let snapshot: Snapshot;
   try {

@@ -22,7 +22,7 @@ function pgQuery(query: string) {
     .replace(/\?/g, () => '$' + ++n)
     .replace(/\binstr\(/g, 'strpos(')
     .replace(
-      /\b(repository_questions|repository_revisions|repository_events|traces|trace_spans|import_jobs)\b/g,
+      /\b(repository_questions|repository_revisions|repository_events|traces|trace_spans|import_jobs|worksheet_configs)\b/g,
       'studio.$1',
     );
 }

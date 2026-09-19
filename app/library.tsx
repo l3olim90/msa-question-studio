@@ -7,18 +7,29 @@ import { studioApi, downloadFile } from '@/lib/client-api';
 import type { RepositoryEntry, RepositorySummary } from '@/lib/repository';
 import { desmosPng } from './desmos-graph';
 import type { WorksheetContent } from '@/lib/word';
+import type {
+  SavedWorksheet,
+  SavedWorksheetSummary,
+} from '@/lib/saved-worksheets';
+import { reorderQuestion } from '@/lib/worksheet';
+import { GripVertical } from 'lucide-react';
+import type { Topic } from './studio';
 
 type Section = { id: string; name: string; questions: RepositorySummary[] };
 export function Library({
   view,
+  active,
   refresh,
   modules,
+  topics,
   onOpen,
   onView,
 }: {
   view: string;
+  active: boolean;
   refresh: number;
   modules: { id: string; name: string }[];
+  topics: Topic[];
   onOpen: (entry: RepositoryEntry) => void;
   onView: (view: 'repository' | 'worksheet') => void;
 }) {
@@ -40,6 +51,143 @@ export function Library({
   const [includeName, setIncludeName] = useState(true),
     [includeClass, setIncludeClass] = useState(true);
   const selected = sections.flatMap((section) => section.questions);
+  const [saved, setSaved] = useState<SavedWorksheetSummary[]>([]);
+  const [savedId, setSavedId] = useState('');
+  const [opened, setOpened] = useState<SavedWorksheet | null>(null);
+  const [savedSnapshot, setSavedSnapshot] = useState(
+    JSON.stringify({
+      title: 'Practice worksheet',
+      instructions: 'Answer all questions. Show your working.',
+      includeName: true,
+      includeClass: true,
+      sections: [{ name: 'Section A', questions: [] }],
+    }),
+  );
+  const [dragged, setDragged] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const configuration = {
+    title,
+    instructions,
+    includeName,
+    includeClass,
+    sections: sections.map((s) => ({
+      name: s.name,
+      questions: s.questions.map((q) => ({ id: q.id, revision: q.revision })),
+    })),
+  };
+  const dirty = savedSnapshot !== JSON.stringify(configuration);
+  const validSave =
+    title.trim() &&
+    sections.every((s) => s.name.trim()) &&
+    selected.length <= 100;
+  async function loadSaved() {
+    const data = await studioApi<{ worksheets: SavedWorksheetSummary[] }>(
+      '/api/worksheets/saved',
+    );
+    setSaved(data.worksheets);
+  }
+  useEffect(() => {
+    if (!active || view !== 'worksheet') return;
+    let cancelled = false;
+    studioApi<{ worksheets: SavedWorksheetSummary[] }>('/api/worksheets/saved')
+      .then((data) => {
+        if (!cancelled) setSaved(data.worksheets);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e.message);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [active, view]);
+  async function savePaper(asNew = false) {
+    await act(async () => {
+      const value = await studioApi<SavedWorksheet>(
+        '/api/worksheets/saved',
+        'POST',
+        {
+          configuration,
+          ...(!asNew && opened
+            ? { id: opened.id, revision: opened.revision }
+            : {}),
+        },
+      );
+      setOpened(value);
+      setSavedId(value.id);
+      setSavedSnapshot(JSON.stringify(value.configuration));
+      await loadSaved();
+      setMessage('Worksheet saved. You can reopen it in a future session.');
+    });
+  }
+  async function openPaper() {
+    if (
+      dirty &&
+      !window.confirm('Open this worksheet and discard unsaved changes?')
+    )
+      return;
+    await act(async () => {
+      const [value, repository] = await Promise.all([
+        studioApi<SavedWorksheet>('/api/worksheets/saved?id=' + savedId),
+        studioApi<{ questions: RepositorySummary[] }>('/api/repository'),
+      ]);
+      const c = value.configuration;
+      let changed = false;
+      const loaded = c.sections.map((s) => ({
+        id: crypto.randomUUID(),
+        name: s.name,
+        questions: s.questions.map((q) => {
+          const current = repository.questions.find((item) => item.id === q.id);
+          if (!current || current.revision !== q.revision) changed = true;
+          return {
+            ...(current || {
+              id: q.id,
+              title: 'Unavailable question — remove this card',
+              module: '',
+              topic: '',
+              difficulty: 'Unavailable',
+              marks: 0,
+              question_type: '',
+              created_at: '',
+              updated_at: '',
+            }),
+            revision: q.revision,
+          };
+        }),
+      }));
+      setSections(loaded);
+      setTarget(loaded[0].id);
+      setTitle(c.title);
+      setInstructions(c.instructions);
+      setIncludeName(c.includeName);
+      setIncludeClass(c.includeClass);
+      setOpened(value);
+      setSavedSnapshot(JSON.stringify(c));
+      setMessage(
+        changed
+          ? 'Worksheet opened. Some questions changed or were deleted. Use Refresh selected questions to accept current approved revisions, then save again.'
+          : 'Worksheet opened. Edit it or export again.',
+      );
+    });
+  }
+  async function refreshSelected() {
+    await act(async () => {
+      const data = await studioApi<{ questions: RepositorySummary[] }>(
+        '/api/repository',
+      );
+      setSections((current) =>
+        current.map((s) => ({
+          ...s,
+          questions: s.questions.flatMap((q) => {
+            const latest = data.questions.find((item) => item.id === q.id);
+            return latest ? [latest] : [];
+          }),
+        })),
+      );
+      setMessage(
+        'Selected questions updated to their current approved revisions. Deleted questions were removed. Save to keep these changes.',
+      );
+    });
+  }
   const load = async () => {
     const data = await studioApi<{ questions: RepositorySummary[] }>(
       '/api/repository?module=' +
@@ -50,6 +198,7 @@ export function Library({
     setQuestions(data.questions);
   };
   useEffect(() => {
+    if (!active) return;
     let cancelled = false;
     const timer = setTimeout(() => {
       studioApi<{ questions: RepositorySummary[] }>(
@@ -72,7 +221,7 @@ export function Library({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [module, search, refresh, view]);
+  }, [active, module, search, refresh, view]);
   async function act(run: () => Promise<void>) {
     setBusy(true);
     setError('');
@@ -97,22 +246,13 @@ export function Library({
       `Added “${question.title}” to ${sections.find((section) => section.id === target)?.name}.`,
     );
   }
-  function move(
-    sectionIndex: number,
-    questionIndex: number,
-    direction: number,
-  ) {
-    setSections((current) =>
-      current.map((section, i) => {
-        if (i !== sectionIndex) return section;
-        const items = [...section.questions];
-        [items[questionIndex], items[questionIndex + direction]] = [
-          items[questionIndex + direction],
-          items[questionIndex],
-        ];
-        return { ...section, questions: items };
-      }),
-    );
+  function drop(sectionId: string, position: number) {
+    if (dragged)
+      setSections((current) =>
+        reorderQuestion(current, dragged, sectionId, position),
+      );
+    setDragged(null);
+    setDropTarget(null);
   }
   async function exportPaper(lecturer: boolean) {
     await act(async () => {
@@ -190,12 +330,14 @@ export function Library({
           {error}
         </p>
       )}
-      {message && <output className="review passed">{message}</output>}
-      {busy && <output>Preparing your request…</output>}
+      {message && <output className="manager-message passed">{message}</output>}
+      {busy && (
+        <output className="manager-progress">Preparing your request…</output>
+      )}
       {view === 'repository' ? (
         <>
           <p className="hint">
-            Approved questions are saved on this app’s machine across sessions.
+            Approved questions are saved in the app database across sessions.
             Open a question to refine it; the approved version changes only when
             you approve its replacement.
           </p>
@@ -337,241 +479,437 @@ export function Library({
           <p className="hint">
             Select approved questions from the repository, organise them into
             named sections, and set their order. Every export includes an answer
-            key and an AI generation notice. Worksheet selections remain on this
-            page until it is reloaded.
+            key and an AI generation notice. Save your worksheet to reopen it
+            across sessions. Drag a card by its grip to change its order or
+            section; the position and section menus also work with a keyboard or
+            touch.
           </p>
-          <label htmlFor={'library-field-2'} className="field">
-            Worksheet title
-            <Input
-              id={'library-field-2'}
-              maxLength={150}
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-            />
-          </label>
-          <div className="row-actions">
-            <label>
-              <input
-                type="checkbox"
-                checked={includeName}
-                onChange={(e) => setIncludeName(e.target.checked)}
-              />{' '}
-              Name field
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={includeClass}
-                onChange={(e) => setIncludeClass(e.target.checked)}
-              />{' '}
-              Class field
-            </label>
-          </div>
-          <label htmlFor={'library-field-3'} className="field">
-            Instructions for students
-            <Textarea
-              id={'library-field-3'}
-              value={instructions}
-              maxLength={5000}
-              onChange={(e) => setInstructions(e.target.value)}
-            />
-          </label>
-          {sections.map((section, i) => (
-            <article className="repository-card" key={section.id}>
-              <label htmlFor={'library-field-4' + section.id} className="field">
-                Section {i + 1} name
-                <Input
-                  id={'library-field-4' + section.id}
-                  maxLength={150}
-                  value={section.name}
-                  onChange={(e) =>
-                    setSections((current) =>
-                      current.map((s) =>
-                        s.id === section.id
-                          ? { ...s, name: e.target.value }
-                          : s,
-                      ),
-                    )
-                  }
-                />
+          <fieldset disabled={busy}>
+            <div className="worksheet-saved">
+              <label className="field">
+                Saved worksheets
+                <select
+                  value={savedId}
+                  onChange={(e) => setSavedId(e.target.value)}
+                >
+                  <option value="">Choose a saved worksheet</option>
+                  {saved.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.title} — {new Date(s.updated_at).toLocaleString()}
+                    </option>
+                  ))}
+                </select>
               </label>
               <div className="row-actions">
                 <Button
                   variant="outline"
-                  disabled={i === 0}
-                  onClick={() =>
-                    setSections((current) => {
-                      const next = [...current];
-                      [next[i - 1], next[i]] = [next[i], next[i - 1]];
-                      return next;
-                    })
-                  }
+                  disabled={!savedId}
+                  onClick={openPaper}
                 >
-                  Move section up
+                  Open worksheet
                 </Button>
-                <Button
-                  variant="outline"
-                  disabled={i === sections.length - 1}
-                  onClick={() =>
-                    setSections((current) => {
-                      const next = [...current];
-                      [next[i + 1], next[i]] = [next[i], next[i + 1]];
-                      return next;
-                    })
-                  }
-                >
-                  Move section down
+                <Button variant="outline" onClick={() => act(loadSaved)}>
+                  Refresh list
                 </Button>
                 <Button
                   variant="outline"
                   onClick={() => {
-                    setTarget(section.id);
-                    onView('repository');
+                    if (
+                      dirty &&
+                      !window.confirm(
+                        'Start a new worksheet and discard unsaved changes?',
+                      )
+                    )
+                      return;
+                    const blank = {
+                      title: 'Practice worksheet',
+                      instructions: 'Answer all questions. Show your working.',
+                      includeName: true,
+                      includeClass: true,
+                      sections: [{ name: 'Section A', questions: [] }],
+                    };
+                    setTitle(blank.title);
+                    setInstructions(blank.instructions);
+                    setIncludeName(true);
+                    setIncludeClass(true);
+                    setSections([{ id: 'first', ...blank.sections[0] }]);
+                    setTarget('first');
+                    setOpened(null);
+                    setSavedId('');
+                    setSavedSnapshot(JSON.stringify(blank));
+                    setMessage('New worksheet ready.');
+                    setError('');
                   }}
                 >
-                  Choose questions
+                  New worksheet
                 </Button>
-                <Button
-                  variant="outline"
-                  disabled={
-                    sections.length === 1 || section.questions.length > 0
-                  }
-                  onClick={() => {
-                    const next = sections.filter((s) => s.id !== section.id);
-                    setSections(next);
-                    if (target === section.id) setTarget(next[0].id);
-                  }}
-                >
-                  Remove empty section
+                <Button disabled={!validSave} onClick={() => savePaper()}>
+                  {opened ? 'Save changes' : 'Save worksheet'}
                 </Button>
-              </div>
-              {!section.questions.length && (
-                <p className="hint">
-                  Add at least one question before exporting, or remove this
-                  empty section.
-                </p>
-              )}
-              {section.questions.map((q, j) => (
-                <div className="worksheet-question" key={q.id}>
-                  <strong>
-                    {sections
-                      .slice(0, i)
-                      .reduce((n, s) => n + s.questions.length, 0) +
-                      j +
-                      1}
-                    . {q.title} <small>({q.marks} marks)</small>
-                  </strong>
-                  <div className="row-actions">
-                    <Button
-                      variant="outline"
-                      disabled={j === 0}
-                      onClick={() => move(i, j, -1)}
-                      aria-label={`Move ${q.title} up`}
-                    >
-                      ↑
-                    </Button>
-                    <Button
-                      variant="outline"
-                      disabled={j === section.questions.length - 1}
-                      onClick={() => move(i, j, 1)}
-                      aria-label={`Move ${q.title} down`}
-                    >
-                      ↓
-                    </Button>
-                    <select
-                      aria-label={`Move ${q.title} to section`}
-                      value={section.id}
-                      onChange={(e) => {
-                        const destination = e.target.value;
-                        setSections((current) =>
-                          current.map((s) => ({
-                            ...s,
-                            questions:
-                              s.id === destination
-                                ? [...s.questions, q]
-                                : s.questions.filter(
-                                    (item) => item.id !== q.id,
-                                  ),
-                          })),
+                {opened && (
+                  <Button
+                    variant="outline"
+                    disabled={!validSave}
+                    onClick={() => savePaper(true)}
+                  >
+                    Save as new worksheet
+                  </Button>
+                )}
+                {opened && (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      if (
+                        !window.confirm(
+                          `Delete saved worksheet “${opened.title}”? Its questions stay in the repository.`,
+                        )
+                      )
+                        return;
+                      void act(async () => {
+                        await studioApi('/api/worksheets/saved', 'DELETE', {
+                          id: opened.id,
+                          revision: opened.revision,
+                        });
+                        setOpened(null);
+                        setSavedId('');
+                        setSavedSnapshot('');
+                        await loadSaved();
+                        setMessage(
+                          'Saved worksheet deleted. The current assembly is still available to save as a new worksheet.',
                         );
+                      });
+                    }}
+                  >
+                    Delete saved worksheet
+                  </Button>
+                )}
+              </div>
+              <p className="hint">
+                {opened
+                  ? `Editing “${opened.title}” · ${dirty ? 'Unsaved changes' : 'Saved'}`
+                  : 'New worksheet · Not yet saved'}
+              </p>
+            </div>
+            <label htmlFor={'library-field-2'} className="field">
+              Worksheet title
+              <Input
+                id={'library-field-2'}
+                maxLength={150}
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+              />
+            </label>
+            <div className="row-actions">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={includeName}
+                  onChange={(e) => setIncludeName(e.target.checked)}
+                />{' '}
+                Name field
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={includeClass}
+                  onChange={(e) => setIncludeClass(e.target.checked)}
+                />{' '}
+                Class field
+              </label>
+            </div>
+            <label htmlFor={'library-field-3'} className="field">
+              Instructions for students
+              <Textarea
+                id={'library-field-3'}
+                value={instructions}
+                maxLength={5000}
+                onChange={(e) => setInstructions(e.target.value)}
+              />
+            </label>
+            {sections.map((section, i) => (
+              <article className="repository-card" key={section.id}>
+                <label
+                  htmlFor={'library-field-4' + section.id}
+                  className="field"
+                >
+                  Section {i + 1} name
+                  <Input
+                    id={'library-field-4' + section.id}
+                    maxLength={150}
+                    value={section.name}
+                    onChange={(e) =>
+                      setSections((current) =>
+                        current.map((s) =>
+                          s.id === section.id
+                            ? { ...s, name: e.target.value }
+                            : s,
+                        ),
+                      )
+                    }
+                  />
+                </label>
+                <div className="row-actions">
+                  <Button
+                    variant="outline"
+                    disabled={i === 0}
+                    onClick={() =>
+                      setSections((current) => {
+                        const next = [...current];
+                        [next[i - 1], next[i]] = [next[i], next[i - 1]];
+                        return next;
+                      })
+                    }
+                  >
+                    Move section up
+                  </Button>
+                  <Button
+                    variant="outline"
+                    disabled={i === sections.length - 1}
+                    onClick={() =>
+                      setSections((current) => {
+                        const next = [...current];
+                        [next[i + 1], next[i]] = [next[i], next[i + 1]];
+                        return next;
+                      })
+                    }
+                  >
+                    Move section down
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setTarget(section.id);
+                      onView('repository');
+                    }}
+                  >
+                    Choose questions
+                  </Button>
+                  <Button
+                    variant="outline"
+                    disabled={
+                      sections.length === 1 || section.questions.length > 0
+                    }
+                    onClick={() => {
+                      const next = sections.filter((s) => s.id !== section.id);
+                      setSections(next);
+                      if (target === section.id) setTarget(next[0].id);
+                    }}
+                  >
+                    Remove empty section
+                  </Button>
+                </div>
+                {!section.questions.length && (
+                  <p className="hint">
+                    Add at least one question before exporting, or remove this
+                    empty section.
+                  </p>
+                )}
+                {section.questions.map((q, j) => (
+                  <div
+                    className={`worksheet-question${dragged === q.id ? ' is-dragging' : ''}${dropTarget === q.id ? ' drop-target' : ''}`}
+                    key={q.id}
+                    onDragOver={(e) => {
+                      if (dragged && dragged !== q.id) {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                        setDropTarget(q.id);
+                      }
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (!dragged || dragged === q.id) return;
+                      const bounds = e.currentTarget.getBoundingClientRect();
+                      const after = e.clientY > bounds.top + bounds.height / 2;
+                      const without = section.questions.filter(
+                        (item) => item.id !== dragged,
+                      );
+                      drop(
+                        section.id,
+                        without.findIndex((item) => item.id === q.id) +
+                          (after ? 1 : 0),
+                      );
+                    }}
+                  >
+                    <button
+                      type="button"
+                      className="drag-handle"
+                      draggable={!busy}
+                      aria-label={`Drag ${q.title} to reorder. You can also use the position menu.`}
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData('text/plain', q.id);
+                        e.dataTransfer.effectAllowed = 'move';
+                        setDragged(q.id);
+                      }}
+                      onDragEnd={() => {
+                        setDragged(null);
+                        setDropTarget(null);
                       }}
                     >
-                      {sections.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name}
-                        </option>
-                      ))}
-                    </select>
-                    <Button
-                      variant="outline"
-                      onClick={() =>
-                        setSections((current) =>
-                          current.map((s) => ({
-                            ...s,
-                            questions: s.questions.filter(
-                              (item) => item.id !== q.id,
-                            ),
-                          })),
-                        )
-                      }
-                    >
-                      Remove
-                    </Button>
+                      <GripVertical size={20} aria-hidden="true" /> Drag to
+                      reorder
+                    </button>
+                    <strong>
+                      {sections
+                        .slice(0, i)
+                        .reduce((n, s) => n + s.questions.length, 0) +
+                        j +
+                        1}
+                      . {q.title} <small>({q.marks} marks)</small>
+                    </strong>
+                    <p className="question-metadata">
+                      {q.module} ·{' '}
+                      {topics.find(
+                        (t) => t.id === q.topic && t.module === q.module,
+                      )?.name ||
+                        q.topic ||
+                        'Topic unavailable'}{' '}
+                      · {q.difficulty} · {q.question_type}
+                    </p>
+                    <div className="row-actions">
+                      <label>
+                        Position{' '}
+                        <select
+                          aria-label={`Position of ${q.title}`}
+                          value={j}
+                          onChange={(e) =>
+                            setSections((current) =>
+                              reorderQuestion(
+                                current,
+                                q.id,
+                                section.id,
+                                Number(e.target.value),
+                              ),
+                            )
+                          }
+                        >
+                          {section.questions.map((item, index) => (
+                            <option key={item.id} value={index}>
+                              {index + 1}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <select
+                        aria-label={`Move ${q.title} to section`}
+                        value={section.id}
+                        onChange={(e) => {
+                          const destination = e.target.value;
+                          setSections((current) =>
+                            current.map((s) => ({
+                              ...s,
+                              questions:
+                                s.id === destination
+                                  ? [...s.questions, q]
+                                  : s.questions.filter(
+                                      (item) => item.id !== q.id,
+                                    ),
+                            })),
+                          );
+                        }}
+                      >
+                        {sections.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name}
+                          </option>
+                        ))}
+                      </select>
+                      <Button
+                        variant="outline"
+                        onClick={() =>
+                          setSections((current) =>
+                            current.map((s) => ({
+                              ...s,
+                              questions: s.questions.filter(
+                                (item) => item.id !== q.id,
+                              ),
+                            })),
+                          )
+                        }
+                      >
+                        Remove
+                      </Button>
+                    </div>
                   </div>
+                ))}
+                <div
+                  className={`worksheet-drop-zone${dropTarget === section.id ? ' drop-target' : ''}`}
+                  onDragOver={(e) => {
+                    if (dragged) {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = 'move';
+                      setDropTarget(section.id);
+                    }
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    drop(section.id, section.questions.length);
+                  }}
+                >
+                  {dragged
+                    ? 'Drop here to place at the end of this section'
+                    : 'Drag questions here to move them into this section'}
                 </div>
-              ))}
-            </article>
-          ))}
-          <div className="row-actions">
-            <Button
-              variant="outline"
-              disabled={sections.length >= 20}
-              onClick={() =>
-                setSections((current) => [
-                  ...current,
-                  {
-                    id: crypto.randomUUID(),
-                    name: `Section ${String.fromCharCode(65 + current.length)}`,
-                    questions: [],
-                  },
-                ])
-              }
-            >
-              Add section
-            </Button>
-            <strong>
-              {selected.length} questions ·{' '}
-              {selected.reduce((n, q) => n + q.marks, 0)} marks
-            </strong>
-          </div>
-          <p className="hint">
-            Student copy: questions and answer key. Lecturer copy: questions,
-            answer key, full worked solutions and proposed marking allocations.
-            Older questions without a concise key use their main solution in the
-            answer key.
-          </p>
-          <div className="row-actions">
-            <Button
-              disabled={
-                busy ||
-                !title.trim() ||
-                sections.some((s) => !s.name.trim() || !s.questions.length)
-              }
-              onClick={() => exportPaper(false)}
-            >
-              Export student Word
-            </Button>
-            <Button
-              disabled={
-                busy ||
-                !title.trim() ||
-                sections.some((s) => !s.name.trim() || !s.questions.length)
-              }
-              onClick={() => exportPaper(true)}
-            >
-              Export lecturer Word
-            </Button>
-          </div>
+              </article>
+            ))}
+            <div className="row-actions">
+              <Button
+                variant="outline"
+                disabled={!selected.length}
+                onClick={refreshSelected}
+              >
+                Refresh selected questions
+              </Button>
+              <Button
+                variant="outline"
+                disabled={sections.length >= 20}
+                onClick={() =>
+                  setSections((current) => [
+                    ...current,
+                    {
+                      id: crypto.randomUUID(),
+                      name: `Section ${String.fromCharCode(65 + current.length)}`,
+                      questions: [],
+                    },
+                  ])
+                }
+              >
+                Add section
+              </Button>
+              <strong>
+                {selected.length} questions ·{' '}
+                {selected.reduce((n, q) => n + q.marks, 0)} marks
+              </strong>
+            </div>
+            <p className="hint">
+              Student copy: questions and answer key. Lecturer copy: each
+              question followed by its main and alternative solutions and
+              marking allocations, with an answer key at the end. Older
+              questions without a concise key use their main solution in the
+              answer key.
+            </p>
+            <div className="row-actions">
+              <Button
+                disabled={
+                  busy ||
+                  !title.trim() ||
+                  sections.some((s) => !s.name.trim() || !s.questions.length)
+                }
+                onClick={() => exportPaper(false)}
+              >
+                Export student Word
+              </Button>
+              <Button
+                disabled={
+                  busy ||
+                  !title.trim() ||
+                  sections.some((s) => !s.name.trim() || !s.questions.length)
+                }
+                onClick={() => exportPaper(true)}
+              >
+                Export lecturer Word
+              </Button>
+            </div>
+          </fieldset>
         </>
       )}
     </section>

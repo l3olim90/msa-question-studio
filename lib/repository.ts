@@ -12,6 +12,7 @@ export type RepositorySummary = {
   id: string;
   module: string;
   topic: string;
+  difficulty: string;
   question_type: string;
   title: string;
   marks: number;
@@ -23,8 +24,8 @@ export type RepositoryEntry = RepositorySummary & { result: Result };
 const columns =
   'id,module,topic,question_type,title,marks,revision,created_at,updated_at';
 export async function listQuestions(module = '', search = '') {
-  return store.all<RepositorySummary>(
-    `SELECT ${columns} FROM repository_questions WHERE deleted_at IS NULL
+  const rows = await store.all<RepositorySummary & { result_json: string }>(
+    `SELECT ${columns},result_json FROM repository_questions WHERE deleted_at IS NULL
     AND (? = '' OR module = ?) AND (? = '' OR instr(lower(title), lower(?)) > 0)
     ORDER BY updated_at DESC, id`,
     module,
@@ -32,6 +33,11 @@ export async function listQuestions(module = '', search = '') {
     search,
     search,
   );
+  return rows.map(({ result_json, ...summary }) => ({
+    ...summary,
+    difficulty: resultSchema.parse(JSON.parse(result_json)).effectiveBrief
+      .difficulty,
+  }));
 }
 export async function getQuestion(
   id: string,
@@ -47,9 +53,11 @@ export async function getQuestion(
       'This question is no longer in the approved repository. Refresh the repository.',
     );
   const { result_json, ...summary } = row;
+  const result = resultSchema.parse(JSON.parse(String(result_json)));
   return {
     ...summary,
-    result: resultSchema.parse(JSON.parse(String(result_json))),
+    difficulty: result.effectiveBrief.difficulty,
+    result,
   } as RepositoryEntry;
 }
 export async function approveQuestion(
@@ -69,7 +77,11 @@ export async function approveQuestion(
     );
   // Human approval is explicit; deterministic format/mark/scope checks still apply.
   await withBank(() =>
-    validateDraft(result.draft, retrieve(result.effectiveBrief), result.generationMode),
+    validateDraft(
+      result.draft,
+      retrieve(result.effectiveBrief),
+      result.generationMode,
+    ),
   );
   const now = new Date().toISOString();
   const questionId = id || randomUUID();

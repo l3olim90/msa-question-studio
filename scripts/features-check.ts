@@ -32,6 +32,10 @@ import { retrieve } from '../lib/retrieval';
 import { selectBase } from '../lib/similar';
 import { generate, validateDraft } from '../lib/generation';
 import { worksheetDocument } from '../lib/word';
+import { referenceRequest } from '../lib/reference-request';
+import { reorderQuestion, worksheetConfigSchema } from '../lib/worksheet';
+import { saveWorksheet, getWorksheet, listWorksheets, deleteWorksheet } from '../lib/saved-worksheets';
+import { POST as savePaperRoute, GET as savedPaperRoute } from '../app/api/worksheets/saved/route';
 import {
   parseSourceMarking,
   normalizeSourceParents,
@@ -200,7 +204,7 @@ try {
   const paper = {
     ...worksheet,
     sections: [
-      { name: 'Section A', questions: [{ id: first.id, result: fixture }] },
+      { name: 'Section A', questions: [{ id: first.id, result: {...fixture, draft: {...fixture.draft, solutions: [fixture.draft.solutions[0], {...fixture.draft.solutions[0], title: 'Alternative interpretation of the diagram'}]}} }] },
       {
         name: 'Section B',
         questions: [
@@ -256,7 +260,15 @@ try {
         xml.includes('Section B') &&
         xml.includes('Question 2'),
     );
-    assert(xml.includes('Full worked solutions') === lecturer);
+    assert(xml.includes('Main solution') === lecturer);
+    if (lecturer) {
+      assert(xml.indexOf('Main solution') > xml.indexOf('Question 1 ['));
+      assert(xml.indexOf('Main solution') < xml.indexOf('Question 2 ['));
+      assert(xml.indexOf('Alternative solution 1') > xml.indexOf('Main solution'));
+      assert(xml.indexOf('Alternative solution 1') < xml.indexOf('Question 2 ['));
+      assert(xml.lastIndexOf('Main solution') > xml.indexOf('Question 2 ['));
+      assert(xml.lastIndexOf('Main solution') < xml.indexOf('Answer key'));
+    }
     assert(xml.includes('Proposed marking allocation') === lecturer);
     assert(
       xml.includes('<m:oMath>') &&
@@ -278,6 +290,33 @@ try {
     )['word/document.xml'],
   );
   assert(!noFields.includes('Name:') && !noFields.includes('Class:'));
+  assert.equal((await listQuestions())[0].difficulty, fixture.effectiveBrief.difficulty);
+  const savedWorksheet = await saveWorksheet(worksheet);
+  closeDatabase();
+  assert.deepEqual((await getWorksheet(savedWorksheet.id)).configuration, worksheet);
+  assert((await listWorksheets()).some(s => s.id === savedWorksheet.id));
+  const changedWorksheet = {...worksheet, title: 'Reordered worksheet', includeClass: false, sections: [...worksheet.sections, {name: 'Work in progress', questions: []}]};
+  const savedAgain = await saveWorksheet(changedWorksheet, savedWorksheet.id, savedWorksheet.revision);
+  assert.equal(savedAgain.revision, 2);
+  assert.deepEqual(savedAgain.configuration, changedWorksheet);
+  await assert.rejects(() => saveWorksheet(worksheet, savedWorksheet.id, 1), /another session/);
+  await assert.rejects(() => deleteWorksheet(savedWorksheet.id, 1), /another session/);
+  assert.equal((await savedPaperRoute(new Request('http://127.0.0.1/api/worksheets/saved?id='+savedWorksheet.id))).status, 200);
+  assert.equal((await savePaperRoute(new Request('http://127.0.0.1/api/worksheets/saved', {method: 'POST', headers: {...headers, Origin: 'https://untrusted.example'}, body: JSON.stringify({configuration: worksheet})}))).status, 403);
+  assert(!worksheetConfigSchema.safeParse({...worksheet, sections: [worksheet.sections[0], worksheet.sections[0]]}).success);
+  await deleteWorksheet(savedWorksheet.id, 2);
+  await assert.rejects(() => getWorksheet(savedWorksheet.id), /no longer/);
+  const cards = [{id:'a', questions:[{id:'1'},{id:'2'},{id:'3'}]}, {id:'b', questions:[]}];
+  assert.deepEqual(reorderQuestion(cards,'1','a',2)[0].questions.map(q=>q.id), ['2','3','1']);
+  assert.deepEqual(reorderQuestion(cards,'3','a',0)[0].questions.map(q=>q.id), ['3','1','2']);
+  const moved = reorderQuestion(cards,'2','b',0);
+  assert.deepEqual(moved.map(s=>s.questions.map(q=>q.id)), [['1','3'],['2']]);
+  assert.equal(cards[0].questions.length,3);
+  const requestKey = referenceRequest(fixture.brief);
+  assert.equal(referenceRequest({...fixture.brief, totalMarks:999, multipleParts:true, partCount:6, creativeContext:true}), requestKey);
+  assert.notEqual(referenceRequest({...fixture.brief, specifications:'engineering application'}), requestKey);
+  assert.notEqual(referenceRequest({...fixture.brief, difficulty:fixture.brief.difficulty === 'Basic' ? 'Challenging' : 'Basic'}), requestKey);
+  console.log('PASS: saved worksheets persist across database reopen, retain layout/options, reject conflicting edits and duplicates; reordering and retrieval dependency keys pass.');
   await deleteQuestion(first.id, 2);
   assert.equal((await listQuestions()).length, 0);
   await assert.rejects(() => getQuestion(first.id), /no longer/);
