@@ -276,6 +276,7 @@ export default function Workspace({
     setError('');
     setApprovalMessage('');
   }
+  const newStructured = questionType === 'Structured' && generationMode === 'new';
   const brief: Brief = {
     module,
     topic,
@@ -284,20 +285,20 @@ export default function Workspace({
         ? topics.filter((t) => t.parent === topic).map((t) => t.id)
         : subs,
     questionType,
-    creativeContext: questionType === 'Structured' && creative,
-    autoParts: questionType === 'Structured' && multiple && autoParts,
-    multipleParts: questionType === 'Structured' && multiple,
+    creativeContext: newStructured && creative,
+    autoParts: newStructured && multiple && autoParts,
+    multipleParts: newStructured && multiple,
     partCount:
-      questionType === 'Structured' && multiple && !autoParts
+      newStructured && multiple && !autoParts
         ? Number(partCount)
         : 2,
     totalMarks: questionType === 'MCQ' ? 2 : Number(marks),
     difficulty: questionType === 'MCQ' ? 'Intermediate' : difficulty,
-    specifications: spec,
+    specifications: generationMode === 'similar' ? '' : spec,
   };
   const configIssues = configurationIssues(brief, topics);
   const validParts =
-    questionType === 'MCQ' ||
+    !newStructured ||
     !multiple ||
     autoParts ||
     (Number.isInteger(Number(partCount)) &&
@@ -353,6 +354,7 @@ export default function Workspace({
     spec,
     marks,
     questionType,
+    generationMode,
     creative,
     multiple,
     partCount,
@@ -368,6 +370,7 @@ export default function Workspace({
     spec,
     marks,
     questionType,
+    generationMode,
     creative,
     multiple,
     partCount,
@@ -644,7 +647,7 @@ export default function Workspace({
           />
           <p className="hint">
             {generationMode === 'similar'
-              ? 'Randomly adapt one compatible few-shot example, preserving its main method while changing numbers or context. This creates a separate draft.'
+              ? 'Randomly adapt one compatible few-shot example, preserving its main method and part structure while changing numbers or context. This creates a separate draft.'
               : 'Create an original question using your specifications and source examples for guidance.'}
           </p>
           <fieldset disabled={!!busy || !history}>
@@ -775,14 +778,14 @@ export default function Workspace({
               </>
             )}
             <>
-              {questionType === 'Structured' && (
+              {newStructured && (
                 <label className="subtopic-option">
                   <Checkbox checked={creative} onCheckedChange={setCreative} />
                   Use a creative context
                 </label>
               )}
             </>
-            {questionType === 'Structured' && (
+            {newStructured && (
               <>
                 <label className="subtopic-option">
                   <Checkbox checked={multiple} onCheckedChange={setMultiple} />
@@ -817,7 +820,7 @@ export default function Workspace({
                 )}
               </>
             )}
-            <label className="field">
+            {generationMode === 'new' ? <label className="field">
               Additional specifications
               <Textarea
                 value={spec}
@@ -825,7 +828,7 @@ export default function Workspace({
                 maxLength={3000}
                 placeholder="For example: two linked parts, use an electrical engineering context…"
               />
-            </label>
+            </label> : <p className="hint">Generate the similar question first. You can make any refinements afterward using Refine draft and recheck.</p>}
             {generationMode === 'similar' &&
               !referencesLoading &&
               !configIssues.length && (

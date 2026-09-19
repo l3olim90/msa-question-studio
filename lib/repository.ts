@@ -69,7 +69,7 @@ export async function approveQuestion(
     );
   // Human approval is explicit; deterministic format/mark/scope checks still apply.
   await withBank(() =>
-    validateDraft(result.draft, retrieve(result.effectiveBrief)),
+    validateDraft(result.draft, retrieve(result.effectiveBrief), result.generationMode),
   );
   const now = new Date().toISOString();
   const questionId = id || randomUUID();

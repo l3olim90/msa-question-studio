@@ -2,11 +2,11 @@ import { withBank } from './bank-data';
 import {generate,DraftReviewError} from './generation';
 import {topicWideMcqBrief} from './retrieval';
 import type {Connection} from './providers';
-import type {GenerationOptions} from './similar';
+import {similarBrief,type GenerationOptions} from './similar';
 import type {Draft} from './schema';
 export const candidateFingerprint=(d:Draft)=>d.question.toLowerCase().replace(/\s+/g,' ').trim();
 async function candidatesInBank(key:string,raw:unknown,settings:Partial<Connection>={},options:GenerationOptions={}){
- const brief=topicWideMcqBrief(raw);const candidates:Awaited<ReturnType<typeof generate>>[]=[];
+ const brief=topicWideMcqBrief(options.mode==='similar'?similarBrief(raw):raw);const candidates:Awaited<ReturnType<typeof generate>>[]=[];
  for(let index=0;index<3;index++){
   let accepted=false;let lastReviewIssue='';
   const attempts:Draft[]=[];

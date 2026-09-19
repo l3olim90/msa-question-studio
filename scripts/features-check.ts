@@ -30,7 +30,7 @@ import { configurationIssues } from '../lib/configuration';
 import { getBank } from '../lib/bank-data';
 import { retrieve } from '../lib/retrieval';
 import { selectBase } from '../lib/similar';
-import { generate } from '../lib/generation';
+import { generate, validateDraft } from '../lib/generation';
 import { worksheetDocument } from '../lib/word';
 import {
   parseSourceMarking,
@@ -438,7 +438,16 @@ try {
   const received: {
     generation_mode: string;
     base_reference: { id: string };
+    brief: Record<string, unknown>;
+    requested_brief?: Record<string, unknown>;
+    edit?: string;
   }[] = [];
+  const linkedDraft = { ...fixture.draft, parts: [
+    {label:'(a)',prompt:'Find the modulus of the given complex number.'},
+    {label:'(b)',prompt:'Find the argument of the given complex number.'},
+  ] };
+  let sourceDraft = linkedDraft;
+  let similarReviews = 0;
   globalThis.fetch = async (_url, init) => {
     const body = JSON.parse(init!.body as string);
     const payload =
@@ -450,8 +459,8 @@ try {
       body.text.format.name === 'marks_feasibility'
         ? fixture.feasibility
         : body.text.format.name === 'review'
-          ? { ...fixture.review, scope_passed: true, format_passed: true }
-          : fixture.draft;
+          ? { ...fixture.review, passed: ++similarReviews > 1, scope_passed: true, format_passed: true, issues: similarReviews === 1 ? ['Clarify the wording.'] : [] }
+          : sourceDraft;
     return Response.json({
       output: [
         {
@@ -463,7 +472,7 @@ try {
   };
   const similar = await generate(
     'fixture-key',
-    fixture.brief,
+    { ...fixture.brief, creativeContext:true, multipleParts:true, autoParts:false, partCount:99, specifications:'STALE-HIDDEN-SPECIFICATION '.repeat(200) },
     undefined,
     '',
     { provider: 'openai' },
@@ -472,6 +481,11 @@ try {
   );
   assert.equal(similar.sourceQuestionId, base.question_id);
   assert.equal(similar.generationMode, 'similar');
+  assert.equal(similar.draft.parts.length, 2);
+  assert(similarReviews >= 2, 'Similar repair also accepts the source structure.');
+  assert.equal(similar.brief.creativeContext, false);
+  assert.equal(similar.brief.specifications, '');
+  assert(received.every(payload=>!JSON.stringify(payload).includes('STALE-HIDDEN-SPECIFICATION')));
   assert(
     received.length >= 3 &&
       received.every(
@@ -482,8 +496,8 @@ try {
   );
   const refined = await generate(
     'fixture-key',
-    fixture.brief,
-    fixture.draft,
+    { ...fixture.brief, creativeContext:true, multipleParts:true, partCount:6 },
+    similar.draft,
     'Keep the task and improve the wording.',
     { provider: 'openai' },
     undefined,
@@ -491,6 +505,21 @@ try {
   );
   assert.equal(refined.sourceQuestionId, base.question_id);
   assert.equal(refined.generationMode, 'similar');
+  assert(received.some(payload=>payload.edit==='Keep the task and improve the wording.'), 'Post-generation refinement instructions still reach the model.');
+  const approvedSimilar = await approveQuestion(similar);
+  const replacedSimilar = await approveQuestion(refined, approvedSimilar.id, approvedSimilar.revision);
+  assert.equal((await getQuestion(replacedSimilar.id)).result.draft.parts.length, 2);
+  await deleteQuestion(replacedSimilar.id, replacedSimilar.revision);
+  sourceDraft = { ...linkedDraft, parts: [] };
+  const standalone = await generate('fixture-key', { ...fixture.brief, multipleParts:true, partCount:3 }, undefined, '', {provider:'openai'}, undefined, {mode:'similar',sourceIds:[base.question_id]});
+  assert.equal(standalone.draft.parts.length, 0);
+  for (const payload of received) for (const brief of [payload.brief, payload.requested_brief].filter(Boolean)) {
+    for (const control of ['creativeContext','multipleParts','autoParts','partCount']) assert(!(control in brief!), `${control} must not constrain similar planning, authoring, repair or review.`);
+  }
+  assert.throws(()=>validateDraft(linkedDraft, retrieve({...fixture.brief,multipleParts:true,partCount:3})), /requested part count/);
+  assert.throws(()=>validateDraft({...linkedDraft, parts:[linkedDraft.parts[0],linkedDraft.parts[0]]}, ctx, 'similar'), /unique part labels/);
+  assert.throws(()=>validateDraft({...linkedDraft,total_marks:fixture.brief.totalMarks+1}, ctx, 'similar'), /requested marks/);
+  console.log('PASS: similar questions ignore stale hidden controls; standalone/multipart generation, repair, refinement and repository approval pass while new-question part counts and format/mark checks remain enforced.');
   // A model repair must not silently remove the mandatory worksheet answer key.
   let keyReviews = 0;
   globalThis.fetch = async (_url, init) => {

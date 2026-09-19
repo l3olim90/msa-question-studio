@@ -1,5 +1,11 @@
 # Migration validation
 
+## Similar-question controls and source structure: 19 September 2026
+
+Similar mode hides creative context, multiple-part controls and additional specifications. A note directs users to refine after generation. Initial similar requests discard stale specifications before validation, and all similar planning, authoring, repair and review requests omit the hidden structure/context controls. Structured similar drafts use the selected source as their structural guide; requested part-count validation remains enabled for new questions. Refinement instructions and explicit repository replacement approval remain supported.
+
+TypeScript, the complete regression suite, focused lint and the Vercel production build passed. Regressions cover stale invalid part counts and oversized specifications, standalone and multipart drafts, repair, refinement, repository approval/replacement, and retained mark/format checks. A live Azure request through the built function adapted source `EM1-EXAM-2425-S2-B3` into a four-part, 10-mark question with passing review despite stale hidden part settings. That live request preceded the additional-specifications change, which is covered by the final regression suite. Browser automation exposed no browser, so interactive UI verification remains outstanding.
+
 ## Remove the separate app login: 18 September 2026
 
 Removed Basic authentication from page/API handling and removed the login fields from server configuration, environment examples and both ignored local environment files. Legacy `APP_USERNAME`/`APP_PASSWORD` values in Vercel are ignored, so no dashboard environment change is required. Hosting deployment protection is unchanged. Everyone who can reach the app shares its repository, source bank, traces and generation capacity.

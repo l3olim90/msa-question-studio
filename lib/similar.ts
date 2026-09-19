@@ -6,6 +6,12 @@ export type GenerationOptions = {
   sourceIds?: string[];
   sourceQuestionId?: string;
 };
+// Ignore hidden controls before parsing, including invalid values left by an
+// older client. Similar questions take their context and structure from a base.
+export function similarBrief(raw: unknown, refining = false) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
+  return { ...raw, creativeContext: false, multipleParts: false, autoParts: false, partCount: 2, ...(!refining ? { specifications: '' } : {}) };
+}
 export function selectBase(
   ctx: ReturnType<typeof retrieve>,
   options: GenerationOptions = {},

@@ -22,11 +22,15 @@ import {
 } from './schema';
 import { retrieve, references } from './retrieval';
 import { calculate } from './calculator';
-import { selectBase, type GenerationOptions } from './similar';
+import { selectBase, similarBrief, type GenerationOptions } from './similar';
 import katex from 'katex';
-// Hidden structured controls are not part of an MCQ authoring request.
-function authoringBrief(brief: ReturnType<typeof retrieve>['brief']) {
-  const { multipleParts, partCount, ...common } = brief;
+// Hidden new-question controls must not constrain similar or MCQ authoring.
+function authoringBrief(brief: ReturnType<typeof retrieve>['brief'], mode: 'new' | 'similar') {
+  if (mode === 'similar') {
+    const { creativeContext: _creative, multipleParts: _multiple, autoParts: _auto, partCount: _count, ...sourceBrief } = brief;
+    return sourceBrief;
+  }
+  const { multipleParts, partCount: _partCount, ...common } = brief;
   return brief.questionType === 'MCQ'
     ? common
     : brief.autoParts
@@ -41,6 +45,7 @@ import { mathParts, repairMathValues, repairLatex } from './math-text';
 export function validateDraft(
   value: unknown,
   ctx: ReturnType<typeof retrieve>,
+  mode: 'new' | 'similar' = 'new',
 ) {
   const d = draftSchema.parse(repairMathValues(value));
   for (const diagram of d.diagrams) {
@@ -88,11 +93,14 @@ export function validateDraft(
     if (
       d.options.length ||
       d.correct_option !== null ||
+      new Set(d.parts.map((p) => p.label)).size !== d.parts.length
+    )
+      throw new Error('A structured question must have unique part labels, no MCQ options and no correct-option selection.');
+    if (mode !== 'similar' &&
       (ctx.brief.multipleParts && ctx.brief.autoParts
         ? d.parts.length < 2 || d.parts.length > 6
         : d.parts.length !==
-          (ctx.brief.multipleParts ? ctx.brief.partCount : 0)) ||
-      new Set(d.parts.map((p) => p.label)).size !== d.parts.length
+          (ctx.brief.multipleParts ? ctx.brief.partCount : 0))
     )
       throw new Error(
         'The structured question does not match the requested part count.',
@@ -149,7 +157,8 @@ async function generateInBank(
   candidateContext?: { index: number; prior: Draft[] },
   options: GenerationOptions = {},
 ) {
-  const requested = retrieve(raw);
+  const mode = options.mode === 'similar' || (previous && options.sourceQuestionId) ? 'similar' : 'new';
+  const requested = retrieve(mode === 'similar' ? similarBrief(raw, !!previous) : raw);
   const base = previous
     ? requested.examples.find((q) => q.question_id === options.sourceQuestionId)
     : selectBase(requested, options);
@@ -202,7 +211,7 @@ async function generateInBank(
                   })),
                 }
               : null,
-            brief: authoringBrief(ctx.brief),
+            brief: authoringBrief(ctx.brief, mode),
             selected_subtopics: ctx.subs.map((s) => ({
               id: s.taxonomy_id,
               name: s.name,
@@ -240,7 +249,7 @@ async function generateInBank(
     input: JSON.stringify({
       ...generationContext,
       user_instructions: prompts.text.user_context,
-      brief: authoringBrief(ctx.brief),
+      brief: authoringBrief(ctx.brief, mode),
       edit,
       candidate_context: candidateContext
         ? {
@@ -323,7 +332,7 @@ async function generateInBank(
                   })),
                 }
               : null,
-            brief: authoringBrief(ctx.brief),
+            brief: authoringBrief(ctx.brief, mode),
             selected_subtopics: ctx.subs.map((s) => ({
               id: s.taxonomy_id,
               name: s.name,
@@ -361,7 +370,7 @@ async function generateInBank(
     try {
       return await repairDraftMath(
         value,
-        (v) => validateDraft(v, ctx),
+        (v) => validateDraft(v, ctx, mode),
         async (draft, issue) =>
           readJSON(
             await response(key, {
@@ -508,9 +517,9 @@ async function generateInBank(
                 })),
               }
             : null,
-          brief: authoringBrief(ctx.brief),
+          brief: authoringBrief(ctx.brief, mode),
           ...generationContext,
-          requested_brief: authoringBrief(requested.brief),
+          requested_brief: authoringBrief(requested.brief, mode),
           configuration_plan: feasibility,
           reference_examples: promptExamples(ctx.examples),
           syllabus: ctx.subs.map((s) => ({
