@@ -1,6 +1,6 @@
 # MSA Question Studio
 
-Version: 2026-09-21
+Version: 2026-09-22
 
 See the [technical documentation](DOCUMENTATION.md) for the architecture, backend workflow, guardrails, tests and extension options, and the [security review](SECURITY.md) for fixes, verification and the limitations of public access.
 
@@ -71,7 +71,7 @@ The app opens without a separate username/password prompt. Vercel deployment pro
 ## Generate, refine and export
 
 1. Select an active module and main topic, then Structured or MCQ.
-2. Structured: choose sub-topics (All means within this topic), difficulty and marks. Basic is fixed at 10 marks. Challenging defaults to 15 marks, editable afterward. Challenging questions can include a non-routine task that rewards interpretation and method selection rather than lengthy calculation. The optional MSA formula-sheet setting lets students consult only the formulas mapped to the selected syllabus scope. Creative context and multiple parts are optional. Choose 2–6 parts or let the model decide.
+2. Structured: choose sub-topics (All means within this topic), difficulty and marks. Selecting Basic defaults to 10 marks; the total remains editable as a positive whole number. Challenging defaults to 15 marks, editable afterward. Challenging questions can include a non-routine task that rewards interpretation and method selection rather than lengthy calculation. The optional MSA formula-sheet setting lets students consult only the formulas mapped to the selected syllabus scope. Creative context and multiple parts are optional. Choose 2–6 parts or let the model decide.
 3. Add methods, context, diagram, rounding or part-mark requirements. Related outputs may share a part; unrelated problems should be separate.
 4. Generate. MCQ mode produces three conceptual candidates with minimal calculation, four options each, one correct answer and fixed 2-or-0 scoring. Page through them with the arrows.
 5. Review source references, solutions and proposed marks. Solution arrows expose alternative methods.

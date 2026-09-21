@@ -112,7 +112,7 @@ try {
   assert.equal(
     briefSchema.parse({ ...fixture.brief, difficulty: 'Basic', totalMarks: 15 })
       .totalMarks,
-    10,
+    15,
   );
   assert.equal(
     briefSchema.parse({ ...fixture.brief, difficulty: 'Basic' }).nonRoutine,
@@ -133,8 +133,42 @@ try {
         { ...fixture.feasibility, total_marks: 15 },
         retrieve({ ...fixture.brief, difficulty: 'Basic' }),
       ),
-    /10 marks/,
+    /did not explain the marks change/,
   );
+  for (const totalMarks of [4, 10, 15]) {
+    const basicBrief = { ...fixture.brief, difficulty: 'Basic' as const, totalMarks };
+    assert.equal(
+      validatePlan(
+        { ...fixture.feasibility, total_marks: totalMarks }, retrieve(basicBrief),
+      ).total_marks,
+      totalMarks,
+    );
+    const stages: string[] = [];
+    globalThis.fetch = async (_url, init) => {
+      const body = JSON.parse(init!.body as string);
+      const input = JSON.parse(typeof body.input === 'string' ? body.input : body.input[0].content[0].text);
+      stages.push(body.text.format.name);
+      assert.equal(input.brief.totalMarks, totalMarks);
+      assert.equal(input.brief.difficulty, 'Basic');
+      const value = body.text.format.name === 'marks_feasibility'
+        ? { ...fixture.feasibility, total_marks: totalMarks }
+        : body.text.format.name === 'review'
+          ? goodReview
+          : { ...fixture.draft, total_marks: totalMarks, solutions: [{ ...fixture.draft.solutions[0], marking: [{ ...fixture.draft.solutions[0].marking[0], marks: totalMarks }] }] };
+      return Response.json({ output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify(value) }] }] });
+    };
+    const generated = resultSchema.parse(await generate('fixture', basicBrief));
+    assert.equal(generated.brief.totalMarks, totalMarks);
+    assert.equal(generated.effectiveBrief.totalMarks, totalMarks);
+    assert.equal(generated.draft.total_marks, totalMarks);
+    assert.deepEqual(stages, ['marks_feasibility', 'module_question', 'review']);
+    const savedBasic = await approveQuestion(generated);
+    assert.equal((await getQuestion(savedBasic.id)).result.brief.totalMarks, totalMarks);
+  }
+  globalThis.fetch = fetchBefore;
+  for (const totalMarks of [0, -1, 1.5]) {
+    assert(!briefSchema.safeParse({ ...fixture.brief, difficulty: 'Basic', totalMarks }).success);
+  }
   const legacy = resultSchema.parse({
     ...fixture,
     brief: { ...fixture.brief, difficulty: 'Basic' },

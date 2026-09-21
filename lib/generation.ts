@@ -704,13 +704,6 @@ export function validatePlan(value: unknown, ctx: ReturnType<typeof retrieve>, p
   }
   if (ctx.brief.questionType === 'MCQ' && plan.total_marks !== 2)
     throw new Error('MCQ plans must retain exactly 2 marks.');
-  if (
-    ctx.brief.questionType === 'Structured' &&
-    policy.mode !== 'similar' &&
-    ctx.brief.difficulty === 'Basic' &&
-    plan.total_marks !== 10
-  )
-    throw new Error('Basic Structured plans must retain exactly 10 marks.');
   const requested = new Set(ctx.brief.subtopics);
   const chosen = new Set(plan.selected_subtopics);
   const omitted = new Set(plan.omitted_subtopics.map((s) => s.id));

@@ -340,7 +340,7 @@ export default function Workspace({
     multipleParts: newStructured && multiple,
     partCount: newStructured && multiple && !autoParts ? Number(partCount) : 2,
     totalMarks:
-      questionType === 'MCQ' ? 2 : generationMode === 'similar' ? 10 : difficulty === 'Basic' ? 10 : Number(marks),
+      questionType === 'MCQ' ? 2 : generationMode === 'similar' ? 10 : Number(marks),
     difficulty: questionType === 'MCQ' && generationMode === 'new' ? 'Intermediate' : difficulty,
     specifications: generationMode === 'similar' ? '' : spec,
   };
@@ -847,6 +847,7 @@ export default function Workspace({
                     name: id,
                   }))}
                   onChange={(v) => {
+                    if (v === difficulty) return;
                     setDifficulty(v as Brief['difficulty']);
                     if (v === 'Challenging') setMarks('15');
                     if (v === 'Basic') setMarks('10');
@@ -858,18 +859,17 @@ export default function Workspace({
                     type="number"
                     min={1}
                     step={1}
-                    value={difficulty === 'Basic' ? '10' : marks}
-                    disabled={difficulty === 'Basic'}
+                    value={marks}
                     aria-invalid={!validMarks}
                     aria-describedby="marks-help"
                     onChange={(e) => setMarks(e.target.value)}
                   />
                   <span id="marks-help" className="hint">
-                    {difficulty === 'Basic'
-                      ? 'Basic structured questions always total 10 marks.'
-                      : validMarks
-                        ? 'Whole numbers, minimum 1. Exact marks are prioritised; any necessary adjustments are explained with the question.'
-                        : 'Enter a whole number of marks of at least 1.'}
+                    {!validMarks
+                      ? 'Enter a whole number of marks of at least 1.'
+                      : difficulty === 'Basic'
+                        ? 'Defaults to 10 marks when you select Basic. You can edit this to any whole number of at least 1.'
+                        : 'Whole numbers, minimum 1. Exact marks are prioritised; any necessary adjustments are explained with the question.'}
                   </span>
                 </label>}
               </>

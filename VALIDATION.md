@@ -1,5 +1,11 @@
 # Migration validation
 
+## Editable Basic structured marks: 22 September 2026
+
+Selecting Basic sets the new Structured question total to 10 as an editable starting value. Subsequent edits are submitted without a client/schema override, and the planner accepts positive whole-number totals using the existing exact-marks policy. Shared prompts now explain the editable default and retain configured totals during review/refinement. MCQs retain 2 marks; similar generation retains its source-mark rules.
+
+TypeScript, the complete regression suite, focused schema/test lint, `git diff --check` and the Vercel production build passed. Mocked planning/authoring/review checks carry Basic totals of 4, 10 and 15 through generation and repository save/load. Invalid totals remain rejected. Browser visual verification and live-model sampling were not performed for this change. No database migration or environment-variable changes are required.
+
 ## Source-led similar questions: 21 September 2026
 
 Similar mode now filters source questions by module, question type, topic and difficulty, without sub-topic or total-mark controls. The server ignores stale hidden fields and revalidates the selected source against all four filters. Empty matches return an empty list. The initial variant retains source scope, difficulty and recorded marks, including Basic/fractional totals; the planner assigns marks when the source is unmarked. MCQs remain 2 marks. New-mode Basic Structured questions remain 10 marks. Non-routine, formula-sheet and structure controls apply only to new questions; subsequent similar-question changes are explicit refinements.

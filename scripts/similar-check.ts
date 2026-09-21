@@ -109,8 +109,8 @@ try {
   assert.equal(selected.specifications, '');
   assert.equal(
     briefSchema.parse({ ...selected, totalMarks: 4 }).totalMarks,
-    10,
-    'New Basic questions still total 10.',
+    4,
+    'New Basic questions retain an explicitly configured total.',
   );
   assert.equal(sourceMarkTotal('3.5'), 3.5);
   assert.equal(sourceMarkTotal(''), null);
