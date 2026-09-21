@@ -6,17 +6,22 @@ import type { Result } from '@/lib/history';
 import type { Draft } from '@/lib/schema';
 import { svgDiagram } from '@/lib/diagram';
 import { Maths } from './maths';
+import { Choice } from './studio';
 function VersionPreview({ draft }: { draft: Draft }) {
   return (
     <div>
-      <h4>{draft.title}</h4>
+      <h4>
+        <Maths inline text={draft.title} />
+      </h4>
       <p className="hint">
         {draft.total_marks} marks · {draft.question_type}
       </p>
       <Maths text={draft.question} />
       {draft.parts.map((p) => (
         <div key={p.label}>
-          <strong>{p.label}</strong>
+          <strong>
+            <Maths inline text={p.label} />
+          </strong>
           <Maths text={p.prompt} />
         </div>
       ))}
@@ -37,7 +42,9 @@ function VersionPreview({ draft }: { draft: Draft }) {
               }
               alt={d.caption || 'Question diagram'}
             />
-            <figcaption>{d.caption}</figcaption>
+            <figcaption>
+              <Maths inline text={d.caption} />
+            </figcaption>
           </figure>
         ))}
       <details>
@@ -45,12 +52,14 @@ function VersionPreview({ draft }: { draft: Draft }) {
         <Maths text={draft.answer_key} />
         {draft.solutions.map((s, i) => (
           <div key={i}>
-            <h4>{s.title}</h4>
+            <h4>
+              <Maths inline text={s.title} />
+            </h4>
             <Maths text={s.content} />
             {s.marking.map((m, j) => (
               <div key={j}>
                 <strong>
-                  {m.part} · {m.marks} marks
+                  <Maths inline text={m.part} /> · {m.marks} marks
                 </strong>
                 <Maths text={m.criterion} />
               </div>
@@ -100,21 +109,19 @@ export function RefinementHistory({
         </p>
       ) : (
         <>
-          <label className="field">
-            Earlier version
-            <select
-              value={selected}
-              onChange={(e) => setSelected(Number(e.target.value))}
-            >
-              {result.previousVersions.map((v, i) => (
-                <option key={i} value={i}>
-                  Version {i + 1} · before {v.change.slice(0, 80)}
-                </option>
-              ))}
-            </select>
-          </label>
+          <Choice
+            label="Earlier version"
+            value={String(selected)}
+            disabled={busy}
+            items={result.previousVersions.map((v, i) => ({
+              id: String(i),
+              name: `Version ${i + 1} | before ${v.change}`,
+            }))}
+            onChange={(value) => setSelected(Number(value))}
+          />
           <p>
-            <strong>Change after this version:</strong> {version.change}
+            <strong>Change after this version:</strong>{' '}
+            <Maths inline text={version.change} />
           </p>
           <p className="hint">{new Date(version.savedAt).toLocaleString()}</p>
           <Button

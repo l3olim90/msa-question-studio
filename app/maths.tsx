@@ -1,6 +1,12 @@
 import katex from 'katex';
 import { mathParts } from '@/lib/math-text';
-export function Maths({ text }: { text: string }) {
+export function Maths({
+  text,
+  inline = false,
+}: {
+  text: string;
+  inline?: boolean;
+}) {
   const bits = [];
   let pos = 0;
   for (const m of mathParts(text)) {
@@ -12,7 +18,7 @@ export function Maths({ text }: { text: string }) {
     let html;
     try {
       html = katex.renderToString(m.latex, {
-        displayMode: m.display,
+        displayMode: m.display && !inline,
         throwOnError: true,
         strict: 'ignore',
         trust: false,
@@ -24,7 +30,7 @@ export function Maths({ text }: { text: string }) {
       html ? (
         <span
           key={`m${m.index}`}
-          className={m.display ? 'display-equation' : ''}
+          className={m.display && !inline ? 'display-equation' : ''}
           dangerouslySetInnerHTML={{ __html: html }}
         />
       ) : (
@@ -34,5 +40,9 @@ export function Maths({ text }: { text: string }) {
     pos = m.index + m.raw.length;
   }
   bits.push(<span key="tail">{text.slice(pos).replace(/\\\$/g, '$')}</span>);
-  return <div className="math-text">{bits}</div>;
+  return inline ? (
+    <span className="math-text math-text-inline">{bits}</span>
+  ) : (
+    <div className="math-text">{bits}</div>
+  );
 }

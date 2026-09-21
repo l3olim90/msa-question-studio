@@ -192,3 +192,14 @@ fieldset{border:0;padding:0;margin:0;min-width:0}.paper-meta{display:flex;justif
 .terminology-form > label { flex: 1; min-width: 180px; }
 .terminology-row, .worksheet-usage { padding: 12px 0; border-bottom: 1px solid var(--border); }
 @media (max-width: 760px) { .revision-comparison { grid-template-columns: minmax(0,1fr); } }
+
+/* Maths in headings and messages inherits the surrounding text rhythm. */
+.math-text-inline{line-height:inherit}
+.desk-heading>div{min-width:0}
+.desk-heading{gap:20px}
+.math-choice [data-slot="select-value"]{display:block;-webkit-line-clamp:unset;overflow:visible}
+.math-choice-options{overflow-x:auto}
+.math-choice-options [data-slot="select-item"]>span{min-width:0;flex-shrink:1;white-space:normal}
+.math-choice-options .math-text-inline{white-space:normal;overflow-wrap:anywhere}
+.row-actions>.math-choice{margin:0}
+.import-maths-preview{padding:16px;margin:16px 0;border:1px solid var(--border);border-radius:8px;overflow-x:auto}

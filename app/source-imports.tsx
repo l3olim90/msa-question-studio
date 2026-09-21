@@ -10,7 +10,8 @@ import type {
   ImportReview,
   ImportRecord,
 } from '@/lib/source-imports';
-import type { Topic } from './studio';
+import { Choice, type Topic } from './studio';
+import { Maths } from './maths';
 export function SourceImports({
   modules,
   topics,
@@ -27,15 +28,22 @@ export function SourceImports({
     [busy, setBusy] = useState(false),
     [dirty, setDirty] = useState(false);
   const [advanced, setAdvanced] = useState('');
-  const [storage,setStorage]=useState<'local'|'supabase'|null>(null);
-  const [workerLastSeen,setWorkerLastSeen]=useState<string|null>(null);
+  const [importModule, setImportModule] = useState(modules[0]?.id || '');
+  const [storage, setStorage] = useState<'local' | 'supabase' | null>(null);
+  const [workerLastSeen, setWorkerLastSeen] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const record = review?.records[index];
   const locked = busy || job?.status !== 'review';
   const loadJobs = useCallback(
     () =>
-      studioApi<{ imports: ImportJob[];storage:'local'|'supabase';workerLastSeen?:string|null }>('/api/imports').then((data) => {
-        setJobs(data.imports);setStorage(data.storage);setWorkerLastSeen(data.workerLastSeen||null);
+      studioApi<{
+        imports: ImportJob[];
+        storage: 'local' | 'supabase';
+        workerLastSeen?: string | null;
+      }>('/api/imports').then((data) => {
+        setJobs(data.imports);
+        setStorage(data.storage);
+        setWorkerLastSeen(data.workerLastSeen || null);
       }),
     [],
   );
@@ -61,7 +69,9 @@ export function SourceImports({
     if (
       !jobId ||
       !jobStatus ||
-      !['queued','commit_queued','extracting', 'committing'].includes(jobStatus)
+      !['queued', 'commit_queued', 'extracting', 'committing'].includes(
+        jobStatus,
+      )
     )
       return;
     const timer = setInterval(() => {
@@ -71,7 +81,11 @@ export function SourceImports({
         .then((data) => {
           setJob(data.job);
           if (data.review) setReview(data.review);
-          if (!['queued','commit_queued','extracting', 'committing'].includes(data.job.status))
+          if (
+            !['queued', 'commit_queued', 'extracting', 'committing'].includes(
+              data.job.status,
+            )
+          )
             void loadJobs();
         })
         .catch((e) => setError(e.message));
@@ -124,7 +138,7 @@ export function SourceImports({
         records: review.records,
         paperVerified: review.papers[0].verified,
         paperNotes: review.papers[0].reviewer_notes,
-        revision:job.review_revision,
+        revision: job.review_revision,
       },
     );
     setReview(data.review);
@@ -142,26 +156,69 @@ export function SourceImports({
         few-shot bank. This does not add generated questions to the approved
         repository.
       </p>
-      {storage==='supabase' && <p className="hint">PDFs upload to private storage. Extraction and approval run in the background queue; scheduled workers may take several minutes to start. {workerLastSeen ? `Worker last checked: ${new Date(workerLastSeen).toLocaleString()}.` : 'No worker has checked the queue yet. Set up the GitHub import workflow or run pnpm worker on the configured computer.'}</p>}
+      {storage === 'supabase' && (
+        <p className="hint">
+          PDFs upload to private storage. Extraction and approval run in the
+          background queue; scheduled workers may take several minutes to start.{' '}
+          {workerLastSeen
+            ? `Worker last checked: ${new Date(workerLastSeen).toLocaleString()}.`
+            : 'No worker has checked the queue yet. Set up the GitHub import workflow or run pnpm worker on the configured computer.'}
+        </p>
+      )}
       <form
         ref={formRef}
         onSubmit={(e) => {
           e.preventDefault();
           const form = new FormData(e.currentTarget);
           void act(async () => {
-            if(storage==='supabase') {
-              for(const field of ['questionPdf','solutionPdf']) {
-                const file=form.get(field);
-                if(!(file instanceof File)||!file.size||file.size>50*1024*1024)throw new Error('Choose both PDFs, each no larger than 50 MB.');
+            if (storage === 'supabase') {
+              for (const field of ['questionPdf', 'solutionPdf']) {
+                const file = form.get(field);
+                if (
+                  !(file instanceof File) ||
+                  !file.size ||
+                  file.size > 50 * 1024 * 1024
+                )
+                  throw new Error(
+                    'Choose both PDFs, each no larger than 50 MB.',
+                  );
               }
-              const data=await studioApi<{id:string;uploads:{kind:string;url:string}[]}>('/api/imports','POST',{action:'prepare',metadata:Object.fromEntries(['module','kind','academicYear','semester'].map(k=>[k,form.get(k)]))});
-              for(const upload of data.uploads){
-                const file=form.get(upload.kind==='questions'?'questionPdf':'solutionPdf') as File;
-                const response=await fetch(upload.url,{method:'PUT',headers:{'Content-Type':'application/pdf'},body:file});
-                if(!response.ok)throw new Error('PDF upload failed. Check the connection and retry the upload.');
+              const data = await studioApi<{
+                id: string;
+                uploads: { kind: string; url: string }[];
+              }>('/api/imports', 'POST', {
+                action: 'prepare',
+                metadata: Object.fromEntries(
+                  ['module', 'kind', 'academicYear', 'semester'].map((k) => [
+                    k,
+                    form.get(k),
+                  ]),
+                ),
+              });
+              for (const upload of data.uploads) {
+                const file = form.get(
+                  upload.kind === 'questions' ? 'questionPdf' : 'solutionPdf',
+                ) as File;
+                const response = await fetch(upload.url, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/pdf' },
+                  body: file,
+                });
+                if (!response.ok)
+                  throw new Error(
+                    'PDF upload failed. Check the connection and retry the upload.',
+                  );
               }
-              await studioApi('/api/imports','POST',{id:data.id,action:'submit'});
-              await open(data.id);await loadJobs();setMessage('PDFs uploaded privately and queued for extraction. You can return later.');return;
+              await studioApi('/api/imports', 'POST', {
+                id: data.id,
+                action: 'submit',
+              });
+              await open(data.id);
+              await loadJobs();
+              setMessage(
+                'PDFs uploaded privately and queued for extraction. You can return later.',
+              );
+              return;
             }
             const response = await fetch('/api/imports', {
               method: 'POST',
@@ -189,16 +246,17 @@ export function SourceImports({
           }
         >
           <div className="manager-tools">
-            <label className="field">
-              Module
-              <select name="module" required>
-                {modules.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.id} — {m.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <Choice
+              label="Module"
+              name="module"
+              required
+              value={importModule}
+              items={modules.map((m) => ({
+                id: m.id,
+                name: `${m.id} — ${m.name}`,
+              }))}
+              onChange={setImportModule}
+            />
             <label className="field">
               Paper type
               <select name="kind">
@@ -256,10 +314,14 @@ export function SourceImports({
       </form>
       {error && (
         <p className="error" role="alert">
-          {error}
+          <Maths inline text={error} />
         </p>
       )}
-      {message && <output className="review passed">{message}</output>}
+      {message && (
+        <output className="review passed">
+          <Maths inline text={message} />
+        </output>
+      )}
       {busy && <output>Processing request…</output>}
       <div className="manager-heading">
         <h2>Import history</h2>
@@ -296,7 +358,7 @@ export function SourceImports({
           </output>
           {job.error && (
             <p className="error" role="alert">
-              {job.error}
+              <Maths inline text={job.error} />
             </p>
           )}
           <div className="row-actions">
@@ -343,28 +405,57 @@ export function SourceImports({
           {review && record && (
             <>
               <div className="manager-tools">
-                <label className="field">
-                  Review question
-                  <select
-                    value={index}
-                    onChange={(e) => {
-                      setIndex(Number(e.target.value));
-                      setAdvanced('');
-                    }}
-                  >
-                    {review.records.map((r, i) => (
-                      <option key={r.id} value={i}>
-                        {r.source_question}{' '}
-                        {r.verified ? '— verified' : '— needs review'}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <Choice
+                  label="Review question"
+                  value={String(index)}
+                  disabled={busy}
+                  items={review.records.map((r, i) => ({
+                    id: String(i),
+                    name: `${r.source_question} | ${r.verified ? 'verified' : 'needs review'}`,
+                  }))}
+                  onChange={(value) => {
+                    setIndex(Number(value));
+                    setAdvanced('');
+                  }}
+                />
                 <span>
                   {review.records.filter((r) => r.verified).length} of{' '}
                   {review.records.length} verified
                 </span>
               </div>
+              <details className="import-maths-preview">
+                <summary>Formatted question and solutions</summary>
+                <h3>
+                  <Maths inline text={record.source_question} />
+                </h3>
+                <Maths text={record.question} />
+                <h4>Main worked solution</h4>
+                <Maths text={record.solution} />
+                {record.alternatives.map((alternative, i) => (
+                  <div key={i}>
+                    <h4>Alternative solution {i + 1}</h4>
+                    <Maths text={alternative.solution} />
+                  </div>
+                ))}
+                {!!record.issues.length && (
+                  <h4>Unresolved extraction issues</h4>
+                )}
+                {record.issues.map((issue, i) => (
+                  <p key={i}>
+                    <Maths inline text={issue} />
+                  </p>
+                ))}
+                {record.reviewer_notes && (
+                  <>
+                    <h4>Reviewer notes</h4>
+                    <Maths text={record.reviewer_notes} />
+                  </>
+                )}
+                <p className="hint">
+                  This preview reflects your edits below. Compare it with the
+                  original PDFs before approving.
+                </p>
+              </details>
               <fieldset disabled={locked}>
                 <p className="hint">
                   Question pages:{' '}
@@ -435,51 +526,31 @@ export function SourceImports({
                       ))}
                     </select>
                   </label>
-                  <label className="field">
-                    Topic
-                    <select
-                      value={record.topic_id}
-                      onChange={(e) =>
-                        updateRecord({
-                          topic_id: e.target.value,
-                          subtopic_id:
-                            topics.find((t) => t.parent === e.target.value)
-                              ?.id || '',
-                          verified: false,
-                        })
-                      }
-                    >
-                      {topics
-                        .filter(
-                          (t) => t.module === job.module && t.level === 'Topic',
-                        )
-                        .map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.name}
-                          </option>
-                        ))}
-                    </select>
-                  </label>
-                  <label className="field">
-                    Primary sub-topic
-                    <select
-                      value={record.subtopic_id}
-                      onChange={(e) =>
-                        updateRecord({
-                          subtopic_id: e.target.value,
-                          verified: false,
-                        })
-                      }
-                    >
-                      {topics
-                        .filter((t) => t.parent === record.topic_id)
-                        .map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.name}
-                          </option>
-                        ))}
-                    </select>
-                  </label>
+                  <Choice
+                    label="Topic"
+                    value={record.topic_id}
+                    disabled={locked}
+                    items={topics.filter(
+                      (t) => t.module === job.module && t.level === 'Topic',
+                    )}
+                    onChange={(value) =>
+                      updateRecord({
+                        topic_id: value,
+                        subtopic_id:
+                          topics.find((t) => t.parent === value)?.id || '',
+                        verified: false,
+                      })
+                    }
+                  />
+                  <Choice
+                    label="Primary sub-topic"
+                    value={record.subtopic_id}
+                    disabled={locked}
+                    items={topics.filter((t) => t.parent === record.topic_id)}
+                    onChange={(value) =>
+                      updateRecord({ subtopic_id: value, verified: false })
+                    }
+                  />
                 </div>
                 <label htmlFor={'source-field-7'} className="field">
                   Source marking JSON (null when absent)
@@ -671,7 +742,7 @@ export function SourceImports({
                         await studioApi('/api/imports', 'POST', {
                           id: job.id,
                           action: 'commit',
-                          revision:job.review_revision,
+                          revision: job.review_revision,
                         });
                         await open(job.id);
                         await loadJobs();

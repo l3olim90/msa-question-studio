@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { studioApi } from '@/lib/client-api';
 import type { TerminologyRule } from '@/lib/terminology';
+import { Maths } from './maths';
 export function TerminologyRules({
   module,
   disabled,
@@ -60,10 +61,14 @@ export function TerminologyRules({
       </p>
       {error && (
         <p className="error" role="alert">
-          {error}
+          <Maths inline text={error} />
         </p>
       )}
-      {message && <output>{message}</output>}
+      {message && (
+        <output>
+          <Maths inline text={message} />
+        </output>
+      )}
       <fieldset disabled={disabled || busy}>
         <Button variant="outline" onClick={() => act(load)}>
           Refresh rules
@@ -71,11 +76,14 @@ export function TerminologyRules({
         {rules.map((rule) => (
           <div className="terminology-row" key={rule.id}>
             <p>
-              <strong>{rule.avoid}</strong> → {rule.prefer}
+              <strong>
+                <Maths inline text={rule.avoid} />
+              </strong>{' '}
+              → <Maths inline text={rule.prefer} />
               {rule.reason && (
                 <>
                   <br />
-                  {rule.reason}
+                  <Maths inline text={rule.reason} />
                 </>
               )}
             </p>
@@ -112,30 +120,30 @@ export function TerminologyRules({
         ))}
         {loaded && !rules.length && <p>No team wording rules saved yet.</p>}
         <div className="terminology-form">
-          <label className="field" htmlFor={"term-avoid-"+module}>
+          <label className="field" htmlFor={'term-avoid-' + module}>
             Avoid this term
             <Input
-              id={"term-avoid-"+module}
+              id={'term-avoid-' + module}
               value={avoid}
               maxLength={100}
               onChange={(e) => setAvoid(e.target.value)}
               placeholder="e.g. antiderivative"
             />
           </label>
-          <label className="field" htmlFor={"term-prefer-"+module}>
+          <label className="field" htmlFor={'term-prefer-' + module}>
             Preferred wording
             <Input
-              id={"term-prefer-"+module}
+              id={'term-prefer-' + module}
               value={prefer}
               maxLength={200}
               onChange={(e) => setPrefer(e.target.value)}
               placeholder="e.g. indefinite integral"
             />
           </label>
-          <label className="field" htmlFor={"term-reason-"+module}>
+          <label className="field" htmlFor={'term-reason-' + module}>
             Reason / teaching note
             <Input
-              id={"term-reason-"+module}
+              id={'term-reason-' + module}
               value={reason}
               maxLength={500}
               onChange={(e) => setReason(e.target.value)}

@@ -1,7 +1,11 @@
 import {reviewWithCalculations} from '../lib/review-calculations';
 import {repairDraftMath} from '../lib/math-repair';
 import {layoutLabels,labelMetrics} from '../lib/label-layout';
-import {repairLatex,repairMathText} from '../lib/math-text';
+import {repairLatex,repairMathText,mathParts} from '../lib/math-text';
+import {createElement} from 'react';
+import {renderToStaticMarkup} from 'react-dom/server';
+import {Maths} from '../app/maths';
+import {Choice} from '../app/studio';
 import {desmosExpressions} from '../lib/desmos';
 import {renderGraphShapes} from '../lib/graph';
 import {generateMcqCandidates} from '../lib/candidates';
@@ -133,6 +137,47 @@ const dimensionDoc=wordDocument(dimensionDraft,[]);fs.writeFileSync('test-output
 console.log('PASS: automatic 2-6 parts, fixed part count, black 1.5 pt outlines, dimension arrowheads and native diagram equations.');
 
 const corruptFraction='\u000crac{6^2}{9^2}';assert.equal(repairLatex(corruptFraction),'\\frac{6^2}{9^2}');assert.equal(repairMathText('Prose\ntext remains. $'+corruptFraction+'$'),'Prose\ntext remains. $\\frac{6^2}{9^2}$');
+// Titles/messages need phrasing content; mathematical markup must remain safe
+// even when a reviewer returns broken notation or HTML/link-like input.
+for (const text of [
+  'Check $\\frac{1}{2}$ carefully.',
+  'Check \\(\\frac{1}{2}\\) carefully.',
+  'Check \\[\\frac{1}{2}\\] carefully.',
+  'Check $$\\frac{1}{2}$$ carefully.',
+]) {
+  assert.equal(mathParts(text).length, 1);
+  assert.equal(mathParts(text)[0].latex, '\\frac{1}{2}');
+  for (const tag of ['h2', 'p', 'strong']) {
+    const html = renderToStaticMarkup(createElement(tag, null, createElement(Maths, { text, inline: true })));
+    assert(html.includes('class="katex"'));
+    assert(!html.includes('<div') && !html.includes('katex-display'));
+    assert(html.includes('Check ') && html.includes(' carefully.'));
+  }
+}
+assert.deepEqual(mathParts('$$x^2$$ then $y$').map((p) => p.display), [true, false]);
+assert(renderToStaticMarkup(createElement(Maths, { text: '$$x^2$$' })).includes('katex-display'));
+assert.equal(mathParts('Price \\$5.00; no maths here.').length, 0);
+assert(renderToStaticMarkup(createElement(Maths, { text: 'Price \\$5.00', inline: true })).includes('Price $5.00'));
+assert(renderToStaticMarkup(createElement(Maths, { text: '$\\frac{1}{$', inline: true })).includes('<code>'));
+const mathChoiceHtml = renderToStaticMarkup(createElement(Choice, {
+  label: 'Module', name: 'module', value: 'EM1', required: true,
+  items: [{ id: 'EM1', name: 'Calculating $\\frac{1}{2}$' }], onChange: () => {},
+}));
+assert(mathChoiceHtml.includes('class="katex"'));
+assert(/name="module"[^>]*value="EM1"/.test(mathChoiceHtml));
+assert(/<label[^>]+for="[^"]+"/.test(mathChoiceHtml));
+for (const text of [
+  '<img src=x onerror=alert(1)>',
+  '<script>alert(1)</script> $x^2$',
+  '$\\href{javascript:alert(1)}{click}$',
+  '$\\href{https://example.com}{click}$',
+  '$\\includegraphics{https://example.com/tracker.png}$',
+  '$\\htmlStyle{background:url(https://example.com/tracker.png)}{x}$',
+]) {
+  const html = renderToStaticMarkup(createElement(Maths, { text, inline: true }));
+  const tags = (html.match(/<[^>]*>/g) || []).join('');
+  assert(!/<(?:img|script|a)\b|\s(?:href|src|onerror)=|style="[^"]*url\(/i.test(tags));
+}
 const repairedDraft=validateDraft({...d,solutions:[{...d.solutions[0],content:'Compute $'+corruptFraction+'$.'}]},ctx);assert(repairedDraft.solutions[0].content.includes('\\frac'));assert(equation(corruptFraction).includes('<m:f>'));assert.equal(repairLatex('\\frac{1}{2}'),'\\frac{1}{2}');assert.equal(repairLatex('x+1\ny+2'),'x+1\ny+2');
 assert.equal(repairLatex('\tfrac{1}{2}'),'\\tfrac{1}{2}');assert.equal(repairLatex('\right)'),'\\right)');
 console.log('PASS: corrupted JSON LaTeX escape repair, unchanged valid maths/prose and editable Word fractions.');

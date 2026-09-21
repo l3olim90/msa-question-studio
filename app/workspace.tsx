@@ -759,7 +759,7 @@ export default function Workspace({
                           )
                         }
                       />
-                      {t.name}
+                      <Maths inline text={t.name} />
                     </label>
                   ))}
                 </div>
@@ -854,10 +854,10 @@ export default function Workspace({
                       {availableFormulas.entries.map((f) => (
                         <div key={f.id}>
                           <p>
-                            <strong>{f.name}</strong> | sheet page {f.page}
+                            <strong><Maths inline text={f.name} /></strong> | sheet page {f.page}
                           </p>
                           <Maths text={'\\[' + f.latex + '\\]'} />
-                          <p className="hint">{f.conditions}</p>
+                          <p className="hint"><Maths inline text={f.conditions} /></p>
                         </div>
                       ))}
                     </details>
@@ -948,7 +948,7 @@ export default function Workspace({
                     {referencesLoading ? 'Loading sources...' : 'Browse source questions'}
                   </Button>
                   <p className="hint">Browse, preview and select in Source references in the main window.</p>
-                  {selectedReference && <p className="source-selected-summary"><strong>Selected:</strong> {selectedReference.label}</p>}
+                  {selectedReference && <p className="source-selected-summary"><strong>Selected:</strong> <Maths inline text={selectedReference.label} /></p>}
                   {(referencesLoading || selectedReference || referenceError) && <Button variant="link" onClick={focusSources} aria-controls="source-references">View source references</Button>}
                 </div>
                 <fieldset className="source-variation-preferences">
@@ -983,8 +983,7 @@ export default function Workspace({
                 <strong>Check the question configuration</strong>
                 {configIssues.map((issue, i) => (
                   <p key={i}>
-                    {issue.field}: {issue.error} Recommendation:{' '}
-                    {issue.recommendation}
+                    <Maths inline text={`${issue.field}: ${issue.error} Recommendation: ${issue.recommendation}`} />
                   </p>
                 ))}
               </div>
@@ -1064,7 +1063,9 @@ export default function Workspace({
                     }
                     onClick={() => openHistory(batch.id, index)}
                   >
-                    <strong>{item.draft.title}</strong>
+                    <strong>
+                      <Maths inline text={item.draft.title} />
+                    </strong>
                     <span>
                       {item.effectiveBrief.module} · {item.draft.question_type}
                       {batch.results.length > 1
@@ -1083,7 +1084,7 @@ export default function Workspace({
           </details>
           {historyWarning && (
             <p role="alert" className="error">
-              {historyWarning}
+              <Maths inline text={historyWarning} />
             </p>
           )}
           {candidates.length === 3 && (
@@ -1130,7 +1131,9 @@ export default function Workspace({
               <div className="eyebrow">
                 {d ? 'WORKING DRAFT' : 'QUESTION PREVIEW'}
               </div>
-              <h2>{d?.title || 'Your next question starts here.'}</h2>
+              <h2>
+                <Maths inline text={d?.title || 'Your next question starts here.'} />
+              </h2>
             </div>
             {d && (
               <div className="export-control">
@@ -1205,7 +1208,7 @@ export default function Workspace({
             )}
           {approvalMessage && (
             <p className="review passed" role="status">
-              {approvalMessage}
+              <Maths inline text={approvalMessage} />
             </p>
           )}
           {binding && !unchangedApproved && (
@@ -1217,7 +1220,7 @@ export default function Workspace({
           )}
           {result?.formulaSheet && (
             <p className="hint">
-              Formula sheet available to students: {result.formulaSheet.title} |{' '}
+              Formula sheet available to students: <Maths inline text={result.formulaSheet.title} /> |{' '}
               {result.formulaSheet.entries.length} relevant entries.{' '}
               <a href="/api/formula-sheet" target="_blank" rel="noreferrer">
                 View sheet
@@ -1227,13 +1230,13 @@ export default function Workspace({
           {result?.sourceQuestionId && (
             <p className="hint">
               Similar-question base:{' '}
-              {result.references.find((r) => r.id === result.sourceQuestionId)
-                ?.label || result.sourceQuestionId}
+              <Maths inline text={result.references.find((r) => r.id === result.sourceQuestionId)
+                ?.label || result.sourceQuestionId} />
             </p>
           )}
           {result?.auditWarning && (
             <p className="error" role="alert">
-              {result.auditWarning}
+              <Maths inline text={result.auditWarning} />
             </p>
           )}
           {error && (
@@ -1241,7 +1244,9 @@ export default function Workspace({
               {generationError && (
                 <strong>Question could not be generated.</strong>
               )}
-              <p>{error}</p>
+              <p>
+                <Maths inline text={error} />
+              </p>
             </div>
           )}
           {result &&
@@ -1256,10 +1261,10 @@ export default function Workspace({
                   result.feasibility.omitted_subtopics.map((item) => (
                     <p key={item.id}>
                       <strong>
-                        {topics.find((t) => t.id === item.id)?.name || item.id}{' '}
+                        <Maths inline text={topics.find((t) => t.id === item.id)?.name || item.id} />{' '}
                         omitted:
                       </strong>{' '}
-                      {item.reason}
+                      <Maths inline text={item.reason} />
                     </p>
                   ))}
                 {result.effectiveBrief.totalMarks !==
@@ -1270,7 +1275,7 @@ export default function Workspace({
                         ? `Marks after generation/refinement: ${result.effectiveBrief.totalMarks}.`
                         : `Marks: requested ${result.brief.totalMarks}, generated ${result.effectiveBrief.totalMarks}.`}
                     </strong>{' '}
-                    {result.feasibility.marks_reason}
+                    <Maths inline text={result.feasibility.marks_reason} />
                   </p>
                 ) : (
                   <p>
@@ -1282,7 +1287,9 @@ export default function Workspace({
                 )}
                 {result.feasibility.specification_adjustments.map(
                   (message, i) => (
-                    <p key={i}>{message}</p>
+                    <p key={i}>
+                      <Maths inline text={message} />
+                    </p>
                   ),
                 )}
                 <p className="hint">
@@ -1319,9 +1326,9 @@ export default function Workspace({
                   <span>
                     {result.effectiveBrief.questionType} ·{' '}
                     {result.effectiveBrief.difficulty} ·{' '}
-                    {result.effectiveBrief.subtopics
+                    <Maths inline text={result.effectiveBrief.subtopics
                       .map((id) => topics.find((t) => t.id === id)?.name)
-                      .join(' · ')}
+                      .join(' · ')} />
                   </span>
                   <strong>{d.total_marks} marks</strong>
                 </div>
@@ -1329,7 +1336,7 @@ export default function Workspace({
                 <Maths text={d.question} />
                 {d.parts.map((part) => (
                   <div className="question-part" key={part.label}>
-                    <strong>{part.label}</strong>
+                    <strong><Maths inline text={part.label} /></strong>
                     <Maths text={part.prompt} />
                   </div>
                 ))}
@@ -1354,7 +1361,9 @@ export default function Workspace({
                           dangerouslySetInnerHTML={{ __html: svgDiagram(x) }}
                         />
                       )}
-                      <figcaption>{x.caption}</figcaption>
+                      <figcaption>
+                        <Maths inline text={x.caption} />
+                      </figcaption>
                     </figure>
                   ))}
                 <div className="solution-heading">
@@ -1389,7 +1398,9 @@ export default function Workspace({
                 </div>
                 {sol && (
                   <>
-                    <p className="method">{sol.title}</p>
+                    <p className="method">
+                      <Maths inline text={sol.title} />
+                    </p>
                     {d.question_type === 'MCQ' && (
                       <p>
                         <strong>Correct answer: {d.correct_option}</strong>
@@ -1409,7 +1420,9 @@ export default function Workspace({
                               }}
                             />
                           )}
-                          <figcaption>{x.caption}</figcaption>
+                          <figcaption>
+                            <Maths inline text={x.caption} />
+                          </figcaption>
                         </figure>
                       ))}
                     {d.question_type === 'MCQ' ? (
@@ -1431,7 +1444,7 @@ export default function Workspace({
                           <tbody>
                             {sol.marking.map((m, i) => (
                               <tr key={i}>
-                                <td>{m.part}</td>
+                                <td><Maths inline text={m.part} /></td>
                                 <td>
                                   <Maths text={m.criterion} />
                                 </td>
@@ -1461,34 +1474,42 @@ export default function Workspace({
                       ? 'Review pass completed'
                       : 'Review found issues'}
                 </strong>
-                <p>{result.review.summary}</p>
+                <p>
+                  <Maths inline text={result.review.summary} />
+                </p>
                 {result.review.issues.map((x, i) => (
-                  <p key={i}>• {x}</p>
+                  <p key={i}>• <Maths inline text={x} /></p>
                 ))}
                 <details>
                   <summary>Scope, difficulty and calculation checks</summary>
-                  <p>{d.scope_explanation}</p>
-                  <p>{d.difficulty_explanation}</p>
+                  <p>
+                    <Maths inline text={d.scope_explanation} />
+                  </p>
+                  <p>
+                    <Maths inline text={d.difficulty_explanation} />
+                  </p>
                   {result.review.context_summary && (
                     <p>
                       <strong>Context plausibility:</strong>{' '}
-                      {result.review.context_summary}
+                      <Maths inline text={result.review.context_summary} />
                     </p>
                   )}
                   {result.review.preservation_notes && (
                     <p>
                       <strong>Refinement changes:</strong>{' '}
-                      {result.review.preservation_notes}
+                      <Maths inline text={result.review.preservation_notes} />
                     </p>
                   )}
                   {result.review.non_routine_parts?.map((part, i) => (
                     <p key={i}>
-                      <strong>Non-routine task:</strong> {part}
+                      <strong>Non-routine task:</strong>{' '}
+                      <Maths inline text={part} />
                     </p>
                   ))}
                   {result.review.scope_evidence?.map((item, i) => (
                     <p key={i}>
-                      <strong>{item.task}:</strong> {item.evidence}
+                      <strong><Maths inline text={item.task} />:</strong>{' '}
+                      <Maths inline text={item.evidence} />
                     </p>
                   ))}
                   <p>
@@ -1498,8 +1519,8 @@ export default function Workspace({
                   </p>
                   {result.calculations.map((c, i) => (
                     <pre key={i}>
-                      {c.expression}
-                      {'\n'}= {c.result}
+                      <Maths inline text={c.expression} />
+                      {'\n'}= <Maths inline text={c.result} />
                     </pre>
                   ))}
                   <p>
@@ -1612,7 +1633,7 @@ export default function Workspace({
               <details key={ref.id} className="ref">
                 <summary>
                   <span>
-                    {ref.label} ·{' '}
+                    <Maths inline text={ref.label} /> ·{' '}
                     {ref.totalMarks
                       ? `${ref.totalMarks} marks`
                       : ref.parentMarks
@@ -1625,7 +1646,7 @@ export default function Workspace({
                 </summary>
                 <div className="source-pages">
                   <p className="hint">
-                    Original question crops for {ref.label}. Shared instructions
+                    Original question crops for <Maths inline text={ref.label} />. Shared instructions
                     are retained where needed; original wording may differ from
                     verified bank corrections. Select an image to view it full
                     size.

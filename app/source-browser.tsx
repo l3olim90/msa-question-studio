@@ -59,7 +59,7 @@ export function SourceBrowser({
       {loading && <output className="source-progress">{progress}</output>}
       {error && (
         <p className="error" role="alert">
-          {error}
+          <Maths inline text={error} />
         </p>
       )}
       {!loaded && !loading && !error && (
@@ -103,7 +103,9 @@ export function SourceBrowser({
                     onChange={() => onSelect(ref.id)}
                   />
                   <span>
-                    <strong>{ref.label}</strong>
+                    <strong>
+                      <Maths inline text={ref.label} />
+                    </strong>
                     <span className="hint">
                       {ref.difficulty} |{' '}
                       {ref.totalMarks
@@ -128,7 +130,9 @@ export function SourceBrowser({
               {chosen ? (
                 <div key={chosen.id}>
                   <div className="eyebrow">SELECTED SOURCE</div>
-                  <h4>{chosen.label}</h4>
+                  <h4>
+                    <Maths inline text={chosen.label} />
+                  </h4>
                   <p className="hint">
                     {chosen.difficulty} |{' '}
                     {chosen.totalMarks

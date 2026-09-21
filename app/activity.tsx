@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { studioApi, downloadFile } from '@/lib/client-api';
+import { Maths } from './maths';
 type Trace = {
   id: string;
   operation: string;
@@ -66,7 +67,7 @@ export function Activity() {
       </p>
       {error && (
         <p role="alert" className="error">
-          {error}
+          <Maths inline text={error} />
         </p>
       )}
       <div className="repository-list">

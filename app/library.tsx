@@ -13,7 +13,8 @@ import type {
 } from '@/lib/saved-worksheets';
 import { reorderQuestion } from '@/lib/worksheet';
 import { Download, GripVertical } from 'lucide-react';
-import type { Topic } from './studio';
+import { Choice, type Topic } from './studio';
+import { Maths } from './maths';
 
 type Section = { id: string; name: string; questions: RepositorySummary[] };
 export function Library({
@@ -353,10 +354,14 @@ export function Library({
       </div>
       {error && (
         <p className="error" role="alert">
-          {error}
+          <Maths inline text={error} />
         </p>
       )}
-      {message && <output className="manager-message passed">{message}</output>}
+      {message && (
+        <output className="manager-message passed">
+          <Maths inline text={message} />
+        </output>
+      )}
       {busy && (
         <output className="manager-progress">Preparing your request…</output>
       )}
@@ -390,19 +395,16 @@ export function Library({
                 onChange={(e) => setSearch(e.target.value)}
               />
             </label>
-            <label className="field">
-              Add to worksheet section
-              <select
-                value={target}
-                onChange={(e) => setTarget(e.target.value)}
-              >
-                {sections.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name || 'Unnamed section'}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <Choice
+              label="Add to worksheet section"
+              value={target}
+              disabled={busy}
+              items={sections.map((s) => ({
+                id: s.id,
+                name: s.name || 'Unnamed section',
+              }))}
+              onChange={setTarget}
+            />
             <Button onClick={() => onView('worksheet')}>
               Worksheet ({selected.length})
             </Button>
@@ -416,7 +418,9 @@ export function Library({
           <div className="repository-list">
             {questions.map((q) => (
               <article key={q.id} className="repository-card">
-                <h2>{q.title}</h2>
+                <h2>
+                  <Maths inline text={q.title} />
+                </h2>
                 <p className="hint">
                   {q.module} · {q.question_type} · {q.marks} marks · Revision{' '}
                   {q.revision} · {new Date(q.updated_at).toLocaleString()}
@@ -436,12 +440,12 @@ export function Library({
                         disabled={busy}
                         onClick={() => openPaper(use.id)}
                       >
-                        {use.title}
+                        <Maths inline text={use.title} />
                       </Button>
                       <span>
                         {' '}
-                        | {use.section} | question revision{' '}
-                        {use.questionRevision}
+                        | <Maths inline text={use.section} /> | question
+                        revision {use.questionRevision}
                         {use.questionRevision !== q.revision
                           ? ' (earlier revision)'
                           : ''}
@@ -487,9 +491,10 @@ export function Library({
                 {deleting === q.id && (
                   <div className="error">
                     <p>
-                      Delete “{q.title}” from the approved repository? It will
-                      be removed from this worksheet selection. Its revision
-                      history remains in the audit database.
+                      Delete “<Maths inline text={q.title} />” from the approved
+                      repository? It will be removed from this worksheet
+                      selection. Its revision history remains in the audit
+                      database.
                     </p>
                     <div className="row-actions">
                       <Button
@@ -553,21 +558,19 @@ export function Library({
               aria-labelledby="saved-worksheets-heading"
             >
               <h2 id="saved-worksheets-heading">Saved worksheets</h2>
-              <label className="field" htmlFor="saved-worksheet">
-                Choose a saved worksheet
-                <select
-                  id="saved-worksheet"
-                  value={savedId}
-                  onChange={(e) => setSavedId(e.target.value)}
-                >
-                  <option value="">Choose a saved worksheet</option>
-                  {saved.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.title} — {new Date(s.updated_at).toLocaleString()}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <Choice
+                label="Choose a saved worksheet"
+                value={savedId}
+                disabled={busy}
+                items={[
+                  { id: '', name: 'Choose a saved worksheet' },
+                  ...saved.map((s) => ({
+                    id: s.id,
+                    name: `${s.title} | ${new Date(s.updated_at).toLocaleString()}`,
+                  })),
+                ]}
+                onChange={setSavedId}
+              />
               <div className="row-actions">
                 <Button
                   variant="outline"
@@ -629,7 +632,7 @@ export function Library({
                     onClick={() => {
                       if (
                         !window.confirm(
-                          `Delete saved worksheet “${opened.title}”? Its questions stay in the repository.`,
+                          'Delete this saved worksheet? Its questions stay in the repository.',
                         )
                       )
                         return;
@@ -654,9 +657,14 @@ export function Library({
                 )}
               </div>
               <p className="hint">
-                {opened
-                  ? `Editing “${opened.title}” · ${dirty ? 'Unsaved changes' : 'Saved'}`
-                  : 'New worksheet · Not yet saved'}
+                <Maths
+                  inline
+                  text={
+                    opened
+                      ? `Editing “${opened.title}” · ${dirty ? 'Unsaved changes' : 'Saved'}`
+                      : 'New worksheet · Not yet saved'
+                  }
+                />
               </p>
             </section>
             <section
@@ -713,21 +721,16 @@ export function Library({
                 </p>
               </div>
               <div className="manager-tools">
-                <label className="field" htmlFor="worksheet-section-target">
-                  Section to fill
-                  <select
-                    id="worksheet-section-target"
-                    value={target}
-                    onChange={(e) => setTarget(e.target.value)}
-                  >
-                    {sections.map((section) => (
-                      <option key={section.id} value={section.id}>
-                        {section.name || 'Unnamed section'} |{' '}
-                        {section.questions.length} questions
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <Choice
+                  label="Section to fill"
+                  value={target}
+                  disabled={busy}
+                  items={sections.map((section) => ({
+                    id: section.id,
+                    name: `${section.name || 'Unnamed section'} | ${section.questions.length} questions`,
+                  }))}
+                  onChange={setTarget}
+                />
                 <label className="field" htmlFor="section-setup-name">
                   Section name
                   <Input
@@ -896,15 +899,21 @@ export function Library({
                         .reduce((n, s) => n + s.questions.length, 0) +
                         j +
                         1}
-                      . {q.title} <small>({q.marks} marks)</small>
+                      . <Maths inline text={q.title} />{' '}
+                      <small>({q.marks} marks)</small>
                     </strong>
                     <p className="question-metadata">
                       {q.module} ·{' '}
-                      {topics.find(
-                        (t) => t.id === q.topic && t.module === q.module,
-                      )?.name ||
-                        q.topic ||
-                        'Topic unavailable'}{' '}
+                      <Maths
+                        inline
+                        text={
+                          topics.find(
+                            (t) => t.id === q.topic && t.module === q.module,
+                          )?.name ||
+                          q.topic ||
+                          'Topic unavailable'
+                        }
+                      />{' '}
                       · {q.difficulty} · {q.question_type}
                     </p>
                     <div className="row-actions">
@@ -931,11 +940,16 @@ export function Library({
                           ))}
                         </select>
                       </label>
-                      <select
-                        aria-label={`Move ${q.title} to section`}
+                      <Choice
+                        label="Move to section"
                         value={section.id}
-                        onChange={(e) => {
-                          const destination = e.target.value;
+                        disabled={busy}
+                        items={sections.map((s) => ({
+                          id: s.id,
+                          name: s.name,
+                        }))}
+                        onChange={(destination) => {
+                          if (destination === section.id) return;
                           setSections((current) =>
                             current.map((s) => ({
                               ...s,
@@ -948,13 +962,7 @@ export function Library({
                             })),
                           );
                         }}
-                      >
-                        {sections.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.name}
-                          </option>
-                        ))}
-                      </select>
+                      />
                       <Button
                         variant="outline"
                         onClick={() =>
