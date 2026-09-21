@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { assertProfessionalContent } from '@/lib/content-safety';
 import { cloudEnabled } from '@/lib/cloud';
 import {getCloudImport,listCloudImports,prepareCloudImport,submitCloudImport,saveCloudReview,commitCloudImport,retryCloudImport,uploadMetadata} from '@/lib/cloud-imports';
 import { readBody, apiError, HttpError } from '@/lib/security';
@@ -26,6 +27,7 @@ export async function POST(request: Request) {
   try {
     if (request.headers.get('content-type')?.startsWith('application/json')) {
       const input=await readBody(request);
+      assertProfessionalContent(input, 'Import');
       if(cloudEnabled() && (input as {action?:string}).action==='prepare') {
         const body=z.object({action:z.literal('prepare'),metadata:uploadMetadata}).strict().parse(input);
         return Response.json(await prepareCloudImport(body.metadata),{headers,status:201});
@@ -89,6 +91,7 @@ export async function PATCH(request: Request) {
       })
       .strict()
       .parse(await readBody(request, 10_000_000));
+    assertProfessionalContent(body, 'Source review');
     return Response.json(
       cloudEnabled() ? await saveCloudReview(body.id,body.records,body.paperVerified,body.paperNotes,body.revision) : saveImportReview(
         body.id,

@@ -1,11 +1,14 @@
 import { ServiceResponseError } from '@/lib/service-response';
-import { generate } from '@/lib/generation';
+import { generate, DraftReviewError } from '@/lib/generation';
 import { generateMcqCandidates } from '@/lib/candidates';
 import { serverConfig } from '@/lib/server-config';
 import { readBody, HttpError, apiError } from '@/lib/security';
 import { acquireGenerationSlot } from '@/lib/generation-slot';
 import { z } from 'zod';
 import { auditGeneration } from '@/lib/observability';
+import { assertProfessionalContent } from '@/lib/content-safety';
+import { reviewEducationalInput } from '@/lib/safety-review';
+import { draftSchema } from '@/lib/schema';
 const payload = z
   .object({
     brief: z.unknown(),
@@ -14,7 +17,10 @@ const payload = z
     mode: z.enum(['new', 'similar']).default('new'),
     sourceIds: z.array(z.string().max(100)).max(6).optional(),
     sourceQuestionId: z.string().min(1).max(100).optional(),
-    variation: z.object({numbers:z.boolean(),context:z.boolean()}).strict().optional(),
+    variation: z
+      .object({ numbers: z.boolean(), context: z.boolean() })
+      .strict()
+      .optional(),
     sessionId: z.uuid().optional(),
     questionId: z
       .string()
@@ -26,6 +32,19 @@ export async function POST(request: Request) {
   let release: (() => Promise<void>) | undefined;
   try {
     const body = payload.parse(await readBody(request));
+    // Validate before reserving capacity or sending anything to a provider.
+    const parsedBrief =
+      body.mode === 'similar' && !body.previous
+        ? { specifications: '' }
+        : z
+            .object({ specifications: z.string().max(3000).default('') })
+            .parse(body.brief);
+    const userText = {
+      additionalContext: parsedBrief.specifications,
+      refinement: body.edit || '',
+      previous: body.previous ? draftSchema.parse(body.previous) : undefined,
+    };
+    assertProfessionalContent(userText);
     if (body.previous && body.mode === 'similar')
       throw new HttpError(
         422,
@@ -40,7 +59,7 @@ export async function POST(request: Request) {
       );
     const connection = configured.connection;
     release = await acquireGenerationSlot();
-    const brief = body.brief as any;
+    const brief = body.brief as { questionType?: string };
     return Response.json(
       await auditGeneration(
         {
@@ -61,8 +80,14 @@ export async function POST(request: Request) {
             variation: body.variation,
           },
         },
-        async () =>
-          brief?.questionType === 'MCQ' && !body.previous
+        async () => {
+          if (
+            userText.additionalContext.trim() ||
+            userText.refinement.trim() ||
+            userText.previous
+          )
+            await reviewEducationalInput(userText, key, connection);
+          return brief?.questionType === 'MCQ' && !body.previous
             ? await generateMcqCandidates(key, brief, connection, {
                 mode: body.mode,
                 sourceIds: body.sourceIds,
@@ -82,11 +107,19 @@ export async function POST(request: Request) {
                   sourceQuestionId: body.sourceQuestionId,
                   variation: body.variation,
                 },
-              ),
+              );
+        },
       ),
       { headers: { 'Cache-Control': 'no-store' } },
     );
   } catch (e) {
+    if (e instanceof DraftReviewError)
+      return apiError(
+        new HttpError(
+          422,
+          'The question did not pass the assessment quality checks. Revise the request and try again.',
+        ),
+      );
     if (e instanceof ServiceResponseError)
       return Response.json(
         { error: e.message, retryable: e.retryable },
@@ -94,12 +127,19 @@ export async function POST(request: Request) {
       );
     if ((e as Error).name === 'ParseError')
       return apiError(
-        new Error(
+        new HttpError(
+          422,
           'The generated maths could not be formatted correctly. Please retry.',
         ),
       );
     return apiError(e);
   } finally {
-    try { await release?.(); } catch { console.warn('Could not release the generation lease; it will expire automatically.'); }
+    try {
+      await release?.();
+    } catch {
+      console.warn(
+        'Could not release the generation lease; it will expire automatically.',
+      );
+    }
   }
 }

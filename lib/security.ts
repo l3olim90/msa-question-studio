@@ -1,4 +1,4 @@
-import {safeError} from './cloud';
+import {ContentSafetyError} from './content-safety';
 export class HttpError extends Error {constructor(public status:number,message:string){super(message);}}
 export async function readBody(request:Request,limit=250000){
  const origin=request.headers.get('origin');if(origin&&origin!==new URL(request.url).origin)throw new HttpError(403,'Invalid origin.');
@@ -10,4 +10,9 @@ export async function readBody(request:Request,limit=250000){
 }
 let active=0;const starts:number[]=[];
 export function generationSlot(){const now=Date.now();while(starts.length&&starts[0]<now-60000)starts.shift();if(active>=2||starts.length>=6)throw new HttpError(429,'Generation capacity reached. Wait before trying again.');active++;starts.push(now);let released=false;return()=>{if(!released){released=true;active--;}};}
-export function apiError(e:unknown){const error=e as Error;return Response.json({error:error.name==='ZodError'?'Please check the brief and draft format.':safeError(error),retryable:false},{status:e instanceof HttpError?e.status:400,headers:{'Cache-Control':'no-store'}});}
+export function apiError(e:unknown){
+ const error=e as Error;
+ const known=e instanceof HttpError||e instanceof ContentSafetyError;
+ // Never send SQL errors, filesystem paths, provider payloads or stack traces.
+ return Response.json({error:known?error.message:error?.name==='ZodError'?'Please check the brief and draft format.':'The request could not be completed. Check your selections or try again. If this persists, contact the app maintainer.',retryable:false},{status:e instanceof HttpError?e.status:e instanceof ContentSafetyError?422:error?.name==='ZodError'?400:500,headers:{'Cache-Control':'no-store'}});
+}

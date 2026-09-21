@@ -29,6 +29,7 @@ import { listTerminology, terminologyIssues } from './terminology';
 import { formulasForBrief } from './formula-catalog';
 import { verifyFormulaSource } from './formula-source';
 import katex from 'katex';
+import { assertProfessionalContent } from './content-safety';
 // Hidden new-question controls must not constrain similar or MCQ authoring.
 function authoringBrief(
   brief: ReturnType<typeof retrieve>['brief'],
@@ -62,6 +63,7 @@ export function validateDraft(
   mode: 'new' | 'similar' = 'new',
 ) {
   const d = draftSchema.parse(repairMathValues(value));
+  assertProfessionalContent(d, 'Question');
   for (const diagram of d.diagrams) {
     for (const shape of diagram.shapes) {
       if (shape.type === 'math') {
@@ -193,6 +195,9 @@ async function generateInBank(
   )
     requested.examples = [base, ...requested.examples].slice(0, 6);
   const terminologyRules = await listTerminology(requested.brief.module);
+  assertProfessionalContent({ specifications: requested.brief.specifications, edit, previous }, 'Request');
+  assertProfessionalContent(terminologyRules, 'Saved terminology');
+  assertProfessionalContent(promptExamples(requested.examples), 'Source material');
   if (requested.brief.useFormulaSheet) verifyFormulaSource();
   const generationContext = {
     is_refinement: !!previous,

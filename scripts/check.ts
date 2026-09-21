@@ -27,9 +27,9 @@ for(const repeatedFailure of [false,true]){
  let toolRounds=0,finals=0,reviews=0;let original:any;
  globalThis.fetch=async(_u:any,init:any)=>{
   const req=JSON.parse(init.body);assert.equal(req.model,'claude-sonnet-5');assert.equal(req.output_config.effort,'high');
-  if(req.system.startsWith('Plan a valid'))return Response.json({content:[{type:'text',text:JSON.stringify(feasible)}]});
-  if(req.tools&&!req.system.startsWith('Independently review')){toolRounds++;original??=req.messages[0];return Response.json({content:[{type:'tool_use',id:`calc-${toolRounds}`,name:'calculate',input:{expression:repeatedFailure?'a=3':`${toolRounds}+1`}}]});}
-  if(req.system.startsWith('Independently review')){reviews++;return Response.json({content:[{type:'text',text:JSON.stringify({passed:true,context_passed:true,context_summary:'No real-world scenario in this fixture.',scope_evidence:[{task:'Fixture task',evidence:'Fixture selected syllabus excerpt.'}],non_routine_passed:true,non_routine_parts:[],preservation_passed:true,preservation_notes:'Fixture preserves the baseline.',scope_passed:true,format_passed:true,issues:[],summary:'Fixture review.'})}]});}
+  if(req.system.includes('Plan a valid'))return Response.json({content:[{type:'text',text:JSON.stringify(feasible)}]});
+  if(req.tools&&!req.system.includes('Independently review')){toolRounds++;original??=req.messages[0];return Response.json({content:[{type:'tool_use',id:`calc-${toolRounds}`,name:'calculate',input:{expression:repeatedFailure?'a=3':`${toolRounds}+1`}}]});}
+  if(req.system.includes('Independently review')){reviews++;return Response.json({content:[{type:'text',text:JSON.stringify({passed:true,context_passed:true,context_summary:'No real-world scenario in this fixture.',scope_evidence:[{task:'Fixture task',evidence:'Fixture selected syllabus excerpt.'}],non_routine_passed:true,non_routine_parts:[],preservation_passed:true,preservation_notes:'Fixture preserves the baseline.',scope_passed:true,format_passed:true,issues:[],summary:'Fixture review.'})}]});}
   finals++;assert.deepEqual(req.messages[0],original);assert(req.system.includes('failed calculations are NOT verified'));assert(req.messages[1].content[0].text.includes('calculator_results'));
   return Response.json({content:[{type:'text',text:JSON.stringify(d)}]});
  };

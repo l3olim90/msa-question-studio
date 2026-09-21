@@ -1,7 +1,9 @@
 allowBuilds:
   esbuild: true
   sharp: true
+patchedDependencies:
+  image-size@2.0.2: patches/image-size@2.0.2.patch
 
 supportedArchitectures:
-  os: [current]
-  cpu: [current]
+  cpu: [ current ]
+  os: [ current ]

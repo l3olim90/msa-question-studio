@@ -59,9 +59,9 @@ export function Activity() {
         </Button>
       </div>
       <p className="hint">
-        Saved records include generation and refinement requests, prompt
-        identity, model calls, token usage, results and errors. Credentials,
-        image bytes and hidden reasoning are excluded. A “running” trace after
+        Trace details show prompt identity, model calls, token usage and status.
+        Prompt text, request content, model responses and internal errors are
+        excluded from this view and its downloads. A “running” trace after
         an app restart may indicate an interrupted request.
       </p>
       {error && (

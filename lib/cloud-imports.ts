@@ -5,6 +5,7 @@ import { getModules, withBank } from './bank-data';
 import { HttpError } from './security';
 import type { ImportJob, ImportReview, ImportRecord } from './source-imports';
 import { manifestSchema } from './import-schema';
+import { publicImportJob } from './import-status';
 
 export const uploadMetadata = z
   .object({
@@ -36,28 +37,7 @@ export async function cloudImportRow(id: string): Promise<CloudImportRow> {
   return row as CloudImportRow;
 }
 export function publicJob(row: CloudImportRow) {
-  const {
-    id,
-    module,
-    paper_id,
-    status,
-    created_at,
-    updated_at,
-    error,
-    log,
-    review_revision,
-  } = row;
-  return {
-    id,
-    module,
-    paper_id,
-    status,
-    created_at,
-    updated_at,
-    error,
-    log,
-    review_revision,
-  };
+  return publicImportJob(row);
 }
 export async function getCloudImport(id: string) {
   const row = await cloudImportRow(id);

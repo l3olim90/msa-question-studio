@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { publicImportJob } from './import-status';
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
@@ -85,7 +86,7 @@ export function getImport(id: string) {
         readFileSync(join(stage, 'review.json'), 'utf8'),
       ) as ImportReview)
     : null;
-  return { job: row, review };
+  return { job: publicImportJob(row), review };
 }
 export function listImports() {
   return (

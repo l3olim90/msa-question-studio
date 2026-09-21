@@ -1,10 +1,12 @@
 import { z } from 'zod';
 import { storedBriefSchema, draftSchema, feasibilitySchema } from './schema';
+import { safeSourceUrl } from './source-url';
+const sourceUrl = z.string().refine(safeSourceUrl, 'Use an application-managed source image.');
 
 const referenceSchema = z.object({
   totalMarks: z.string().nullable(),
   parentMarks: z.string().nullable(),
-  screenshots: z.array(z.object({ page: z.number(), url: z.string() })),
+  screenshots: z.array(z.object({ page: z.number(), url: sourceUrl })),
   id: z.string(),
   label: z.string(),
   question: z.string(),
@@ -12,7 +14,7 @@ const referenceSchema = z.object({
   alternatives: z.array(z.string()),
   difficulty: z.string(),
   marking: z.unknown(),
-  images: z.array(z.object({ name: z.string(), url: z.string() })),
+  images: z.array(z.object({ name: z.string(), url: sourceUrl })),
   match: z.string(),
   questionType: z.enum(['MCQ', 'Structured']).optional(),
   alternativeMarking: z.array(z.unknown()).optional(),

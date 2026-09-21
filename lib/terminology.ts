@@ -4,6 +4,7 @@ import { atomic, store } from './store';
 import { cloudEnabled } from './cloud';
 import { HttpError } from './security';
 import type { Draft } from './schema';
+import { assertProfessionalContent } from './content-safety';
 
 export const terminologyInput = z
   .object({
@@ -32,6 +33,7 @@ export async function saveTerminology(
   revision?: number,
 ) {
   const rule = terminologyInput.parse(value);
+  assertProfessionalContent(rule, 'Terminology rule');
   return atomic(async (db) => {
     const existing = id
       ? await db.get<TerminologyRule>(

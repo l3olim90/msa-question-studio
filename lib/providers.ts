@@ -1,6 +1,7 @@
 import { readServiceJSON, ServiceResponseError } from './service-response';
 import { z } from 'zod';
 import { auditProvider } from './observability';
+import { assertSafeModelOutput, EDUCATIONAL_SAFETY_POLICY } from './content-safety';
 export const connectionSchema = z.object({
   provider: z.enum(['openai', 'azure', 'anthropic']).default('openai'),
   endpoint: z.string().max(250).default(''),
@@ -36,9 +37,10 @@ export async function providerError(
           .replace(/[\u0000-\u001f]/g, ' ')
           .slice(0, 1000)
       : '';
-  const message = clean(error.message),
-    code = clean(error.code || error.type),
-    param = clean(error.param);
+  // Provider errors can echo prompts. Only expose known diagnostic identifiers.
+  const rawCode = clean(error.code || error.type), rawParam = clean(error.param);
+  const code = ['invalid_json_schema', 'invalid_api_key', 'rate_limit_exceeded', 'insufficient_quota', 'content_filter'].includes(rawCode) ? rawCode : '';
+  const param = ['response_format', 'text.format', 'model'].includes(rawParam) ? rawParam : '';
   const fallback =
     r.status === 401
       ? 'The API key was not accepted.'
@@ -48,7 +50,7 @@ export async function providerError(
           ? 'Check model access, resource endpoint and deployment name.'
           : 'The provider rejected the request.';
   return new ServiceResponseError(
-    `${provider} request failed (${r.status})${code ? ` [${code}]` : ''}${param ? ` (${param})` : ''}: ${message || fallback}`,
+    `${provider} request failed (${r.status})${code ? ` [${code}]` : ''}${param ? ` (${param})` : ''}: ${fallback}`,
     r.status >= 500 || r.status === 429,
   );
 }
@@ -163,9 +165,14 @@ export async function providerResponse(
   body: any,
   connection: Connection,
 ) {
-  return auditProvider(body, connection.provider, modelFor(connection), () =>
-    sendProviderResponse(key, body, connection),
-  );
+  const secured = { ...body, instructions: EDUCATIONAL_SAFETY_POLICY + '\n\n' + (body.instructions || '') };
+  return auditProvider(secured, connection.provider, modelFor(connection), async () => {
+    const result = await sendProviderResponse(key, secured, connection);
+    const visible = (result.output || []).flatMap((item: { type?: string; arguments?: string; content?: { type: string; text?: string }[] }) =>
+      item.type === 'function_call' ? [item.arguments || ''] : (item.content || []).filter(part => part.type === 'output_text').map(part => part.text || ''));
+    assertSafeModelOutput(visible, secured.instructions, key);
+    return result;
+  });
 }
 async function sendProviderResponse(
   key: string,

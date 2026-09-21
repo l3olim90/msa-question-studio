@@ -392,7 +392,7 @@ try {
     'do-not-store',
   ])
     assert(!JSON.stringify(spans).includes(secret));
-  assert(JSON.stringify(spans).includes('Private prompt'));
+  assert(!JSON.stringify(spans).includes('Private prompt'));
   await assert.rejects(
     () =>
       auditGeneration({ operation: 'refine' }, () =>

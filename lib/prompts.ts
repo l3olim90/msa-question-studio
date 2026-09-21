@@ -1,6 +1,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createHash } from 'node:crypto';
+import { EDUCATIONAL_SAFETY_POLICY } from './content-safety';
 
 export const promptNames = [
   'quality_contract',
@@ -81,6 +82,7 @@ export function loadPrompts(module = 'EM1') {
           module,
           shared: sharedSource,
           overrides: moduleSource,
+          securityPolicy: EDUCATIONAL_SAFETY_POLICY,
         }),
       )
       .digest('hex'),

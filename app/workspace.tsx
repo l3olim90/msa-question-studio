@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { generationRequest, readServiceJSON } from '@/lib/service-response';
+import { generationRequest } from '@/lib/service-response';
+import { sourceQuestionsRequest, SOURCE_REQUEST_ATTEMPTS } from '@/lib/source-request';
 import { DesmosGraph, desmosPng } from './desmos-graph';
 import { Choice, type Topic } from './studio';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -118,7 +119,6 @@ export default function Workspace({
     [error, setError] = useState(''),
     [result, setResult] = useState<Result | null>(null),
     [refs, setRefs] = useState<Ref[]>([]),
-    [exact, setExact] = useState(0),
     [solution, setSolution] = useState(0),
     [diagramIndex, setDiagramIndex] = useState(0),
     [shapeIndex, setShapeIndex] = useState(0),
@@ -131,8 +131,10 @@ export default function Workspace({
   const [generationMode, setGenerationMode] = useState<'new' | 'similar'>(
     'new',
   );
-  const [referenceError, setReferenceError] = useState(''),
-    [referencesLoading, setReferencesLoading] = useState(false);
+  const [sourceLoad, setSourceLoad] = useState<{ key: string; loading: boolean; progress: string; error: string } | null>(null);
+  const sourceAbort = useRef<AbortController | null>(null);
+  const sourcePanel = useRef<HTMLElement | null>(null);
+  const draftPanel = useRef<HTMLElement | null>(null);
   const [selectedSource, setSelectedSource] = useState('');
   const [sourceKey, setSourceKey] = useState('');
   const [variation, setVariation] = useState({
@@ -310,33 +312,41 @@ export default function Workspace({
     difficulty,
   };
   const browseKey = sourceRequest(sourceFilter);
-  const sourceSelectionValid = sourceKey === browseKey && !!selectedSource;
+  const referencesLoading = sourceLoad?.key === browseKey && sourceLoad.loading;
+  const referenceError = sourceLoad?.key === browseKey ? sourceLoad.error : '';
+  const sourceProgress = sourceLoad?.key === browseKey ? sourceLoad.progress : '';
+  const selectedReference = sourceKey === browseKey ? refs.find(ref => ref.id === selectedSource) : undefined;
+  const sourceSelectionValid = !!selectedReference;
+  useEffect(() => () => sourceAbort.current?.abort(), [browseKey, generationMode, view]);
+  function focusSources() {
+    sourcePanel.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    sourcePanel.current?.focus({ preventScroll: true });
+  }
   async function browseSources() {
-    if (configIssues.length || referencesLoading) return;
-    setReferencesLoading(true);
-    setReferenceError('');
+    if (configIssues.length || referencesLoading || busy) return;
+    sourceAbort.current?.abort();
+    const controller = new AbortController();
+    sourceAbort.current = controller;
     setSelectedSource('');
     const key = browseKey;
+    setSourceLoad({ key, loading: true, progress: 'Loading source questions...', error: '' });
+    focusSources();
     try {
-      const response = await fetch('/api/source-questions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: browseKey,
-        signal: AbortSignal.timeout(20000),
+      const data = await sourceQuestionsRequest(key, controller.signal, ({ attempt, retrying }) => {
+        if (sourceAbort.current === controller && !controller.signal.aborted)
+          setSourceLoad({ key, loading: true, error: '', progress: `${retrying ? 'Retrying automatically' : 'Loading source questions'} (attempt ${attempt} of ${SOURCE_REQUEST_ATTEMPTS})...` });
       });
-      const data = await readServiceJSON(response, 'Source browsing');
-      if (!response.ok) throw new Error(data.error);
+      if (controller.signal.aborted || sourceAbort.current !== controller) return;
       setRefs(data.references);
-      setExact(data.exactExamples);
       setSourceKey(key);
     } catch (e) {
-      setReferenceError(
-        (e as Error).name === 'TimeoutError'
-          ? 'Source browsing took too long. Try Browse source questions again.'
-          : (e as Error).message,
-      );
+      if (!controller.signal.aborted && sourceAbort.current === controller)
+        setSourceLoad({ key, loading: false, progress: '', error: (e as Error).message });
     } finally {
-      setReferencesLoading(false);
+      if (sourceAbort.current === controller) {
+        sourceAbort.current = null;
+        setSourceLoad(current => current?.key === key ? { ...current, loading: false, progress: '' } : current);
+      }
     }
   }
   useEffect(() => {
@@ -567,7 +577,7 @@ export default function Workspace({
 
   const d = result?.draft,
     sol = d?.solutions[solution],
-    shownRefs = result?.references || refs,
+    shownRefs = result?.references || [],
     diagram = d?.diagrams[diagramIndex],
     shape = diagram?.shapes[shapeIndex];
   return (
@@ -910,6 +920,7 @@ export default function Workspace({
                   maxLength={3000}
                   placeholder="For example: two linked parts, use an electrical engineering context…"
                 />
+                <span className="hint">Use professional educational wording. Context is checked before generation.</span>
               </label>
             ) : (
               <p className="hint">
@@ -921,18 +932,14 @@ export default function Workspace({
               </p>
             )}
             {generationMode === 'similar' && (
-              <SourceBrowser
-                references={sourceKey === browseKey ? refs : []}
-                selected={sourceSelectionValid ? selectedSource : ''}
-                onSelect={setSelectedSource}
-                onBrowse={browseSources}
-                loading={referencesLoading}
-                disabled={!!configIssues.length}
-                loaded={sourceKey === browseKey}
-                error={referenceError}
-                variation={variation}
-                onVariation={setVariation}
-              />
+              <div className="source-browse-launcher">
+                <Button variant="outline" disabled={!!configIssues.length || referencesLoading} onClick={browseSources} aria-controls="source-references">
+                  {referencesLoading ? 'Loading sources...' : 'Browse source questions'}
+                </Button>
+                <p className="hint">Browse, preview and select in Source references in the main window.</p>
+                {selectedReference && <p className="source-selected-summary"><strong>Selected:</strong> {selectedReference.label}</p>}
+                {(referencesLoading || selectedReference || referenceError) && <Button variant="link" onClick={focusSources} aria-controls="source-references">View source references</Button>}
+              </div>
             )}
             {configIssues.length > 0 && (
               <div className="error" role="alert">
@@ -949,7 +956,7 @@ export default function Workspace({
               className="generate"
               onClick={() => generate()}
               disabled={
-                (generationMode === 'similar' && !sourceSelectionValid) ||
+                (generationMode === 'similar' && (!sourceSelectionValid || referencesLoading)) ||
                 !!configIssues.length ||
                 !validMarks ||
                 !validParts ||
@@ -984,7 +991,7 @@ export default function Workspace({
             displayed question.
           </p>
         </aside>
-        <section className="desk">
+        <section className="desk" ref={draftPanel} tabIndex={-1}>
           <details className="question-history">
             <summary>
               Drafts this visit ·{' '}
@@ -1123,6 +1130,7 @@ export default function Workspace({
                   maxLength={3000}
                   placeholder="For example: simplify part (b), or change the context while retaining 10 marks…"
                 />
+                <span className="hint">Describe the question changes using professional educational language.</span>
               </label>
               <Button
                 disabled={!!busy || !edit.trim()}
@@ -1533,22 +1541,38 @@ export default function Workspace({
               )}
             </>
           )}
-          <section className="references">
+          <section className="references" id="source-references" ref={sourcePanel} tabIndex={-1} aria-label="Source references">
             <div className="eyebrow">
-              {result ? 'EXAMPLES USED' : 'SOURCE REFERENCES'}
+              SOURCE REFERENCES
             </div>
-            <h3>{shownRefs.length} reference questions</h3>
+            {generationMode === 'similar' && <SourceBrowser
+              key={browseKey}
+              references={sourceKey === browseKey ? refs : []}
+              selected={selectedReference?.id || ''}
+              onSelect={setSelectedSource}
+              onBrowse={browseSources}
+              loading={referencesLoading}
+              disabled={!!busy || !history || !!configIssues.length}
+              loaded={sourceKey === browseKey}
+              error={referenceError}
+              progress={sourceProgress}
+              variation={variation}
+              onVariation={setVariation}
+              onGenerate={() => { draftPanel.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); void generate(); }}
+              generateLabel={brief.questionType === 'MCQ' ? 'Generate 3 similar MCQs' : 'Generate similar question'}
+            />}
+            {result && <h3>References used by the current draft ({shownRefs.length})</h3>}
             {!result && generationMode === 'new' && (
               <p className="hint">
                 Sources are retrieved when you click Generate new question.
               </p>
             )}
-            <p className="hint">
-              {result ? result.exactExamples : exact} exact sub-topic matches.
+            {result && <p className="hint">
+              {result.exactExamples} exact sub-topic matches.
               Related examples stay within the selected topic. Source totals
               without step allocations are not treated as detailed marking
               schemes.
-            </p>
+            </p>}
             {shownRefs.map((ref) => (
               <details key={ref.id} className="ref">
                 <summary>

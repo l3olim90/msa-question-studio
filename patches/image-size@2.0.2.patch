@@ -1,0 +1,60 @@
+diff --git a/dist/fromFile.cjs b/dist/fromFile.cjs
+index c226d3dac07f235db456c774b26cca88f655e1af..021e64bba903281e8a38956b7889ad689067f071 100644
+--- a/dist/fromFile.cjs
++++ b/dist/fromFile.cjs
+@@ -994,7 +994,9 @@ var globalOptions = {
+ function imageSize(input) {
+   const type = detector(input);
+   if (typeof type !== "undefined") {
+-    if (globalOptions.disabledTypes.indexOf(type) > -1) {
++    // Local mitigation for GHSA-w3rx-r6r6-pgpr and GHSA-5p2g-fcmc-qvqq.
++    // This app uses PNG/JPEG/PDF only; do not enter the vulnerable decoders.
++    if (["icns", "heif", "jxl", "jxl-stream"].includes(type) || globalOptions.disabledTypes.indexOf(type) > -1) {
+       throw new TypeError(`disabled file type: ${type}`);
+     }
+     const size = typeHandlers.get(type).calculate(input);
+diff --git a/dist/fromFile.mjs b/dist/fromFile.mjs
+index 4a3c44432982397204f7a9d04fc66ef65a8e7ba4..1d198e98a21403aff22d233a329e3f9bff3765fa 100644
+--- a/dist/fromFile.mjs
++++ b/dist/fromFile.mjs
+@@ -971,7 +971,9 @@ var globalOptions = {
+ function imageSize(input) {
+   const type = detector(input);
+   if (typeof type !== "undefined") {
+-    if (globalOptions.disabledTypes.indexOf(type) > -1) {
++    // Local mitigation for GHSA-w3rx-r6r6-pgpr and GHSA-5p2g-fcmc-qvqq.
++    // This app uses PNG/JPEG/PDF only; do not enter the vulnerable decoders.
++    if (["icns", "heif", "jxl", "jxl-stream"].includes(type) || globalOptions.disabledTypes.indexOf(type) > -1) {
+       throw new TypeError(`disabled file type: ${type}`);
+     }
+     const size = typeHandlers.get(type).calculate(input);
+diff --git a/dist/index.cjs b/dist/index.cjs
+index bde0210eb131db06ccca30a5c466c7252a03af50..e83f264aef17a5f7226c01505874ac2b2675bc9b 100644
+--- a/dist/index.cjs
++++ b/dist/index.cjs
+@@ -970,7 +970,9 @@ var globalOptions = {
+ function imageSize(input) {
+   const type = detector(input);
+   if (typeof type !== "undefined") {
+-    if (globalOptions.disabledTypes.indexOf(type) > -1) {
++    // Local mitigation for GHSA-w3rx-r6r6-pgpr and GHSA-5p2g-fcmc-qvqq.
++    // This app uses PNG/JPEG/PDF only; do not enter the vulnerable decoders.
++    if (["icns", "heif", "jxl", "jxl-stream"].includes(type) || globalOptions.disabledTypes.indexOf(type) > -1) {
+       throw new TypeError(`disabled file type: ${type}`);
+     }
+     const size = typeHandlers.get(type).calculate(input);
+diff --git a/dist/index.mjs b/dist/index.mjs
+index 22c17afad4e406eba013fff7858366cb5f8e3ba4..9eabfdd362cc73a057032dbab08c2a285639187d 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -966,7 +966,9 @@ var globalOptions = {
+ function imageSize(input) {
+   const type = detector(input);
+   if (typeof type !== "undefined") {
+-    if (globalOptions.disabledTypes.indexOf(type) > -1) {
++    // Local mitigation for GHSA-w3rx-r6r6-pgpr and GHSA-5p2g-fcmc-qvqq.
++    // This app uses PNG/JPEG/PDF only; do not enter the vulnerable decoders.
++    if (["icns", "heif", "jxl", "jxl-stream"].includes(type) || globalOptions.disabledTypes.indexOf(type) > -1) {
+       throw new TypeError(`disabled file type: ${type}`);
+     }
+     const size = typeHandlers.get(type).calculate(input);

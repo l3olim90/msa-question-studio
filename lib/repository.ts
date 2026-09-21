@@ -7,6 +7,7 @@ import { HttpError } from './security';
 import { validateDraft } from './generation';
 import { retrieve } from './retrieval';
 import type { Result } from './history';
+import { assertProfessionalContent } from './content-safety';
 import { worksheetUsage, type WorksheetUsage } from './saved-worksheets';
 
 export type RepositorySummary = {
@@ -70,6 +71,7 @@ export async function approveQuestion(
   expectedRevision?: number,
 ): Promise<RepositoryEntry> {
   const result = resultSchema.parse(value);
+  assertProfessionalContent(result, 'Question and refinement history');
   if (
     !result.review.passed ||
     result.review.scope_passed === false ||

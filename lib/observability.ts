@@ -18,7 +18,7 @@ export function auditContent(value: unknown): string {
   let encoded =
     JSON.stringify(value, (key, item) => {
       if (
-        /^(?:image_url|encrypted_content|_anthropicContent|thinking|signature|headers|authorization|api_key)$/i.test(
+        /^(?:instructions|user_instructions|system|developer|image_url|encrypted_content|_anthropicContent|thinking|signature|headers|authorization|api_key)$/i.test(
           key,
         )
       )
@@ -94,7 +94,7 @@ export async function auditGeneration<T>(
 ): Promise<T> {
   const audit: Audit = {
     id: randomUUID(),
-    capture: process.env.AUDIT_CAPTURE_CONTENT !== 'false',
+    capture: process.env.AUDIT_CAPTURE_CONTENT === 'true',
     failed: false,
   };
   return current.run(audit, async () => {
@@ -181,7 +181,7 @@ export async function auditProvider<
       now(),
       'running',
       audit.capture
-        ? auditContent({ instructions: body.instructions, input: body.input })
+        ? auditContent({ input: body.input })
         : null,
     );
   });

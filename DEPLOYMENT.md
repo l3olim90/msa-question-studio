@@ -17,7 +17,7 @@ DATABASE_URL=YOUR-TRANSACTION-POOLER-CONNECTION-STRING
 
 In Supabase, find the secret key under **Project Settings → API Keys** (the server secret, not the publishable key). Find the PostgreSQL URL under **Connect → Transaction pooler**; use port 6543, replace the password placeholder, and URL-encode special characters in the password. It is a different credential from the API key. This app disables prepared statements and reserves connections to avoid pipelining independent transactions through the pooler.
 
-Keep the existing active AI provider settings from `.env`. For Azure, these are `AI_PROVIDER=azure`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, and `AZURE_OPENAI_CHAT_DEPLOYMENT_NAME`. Optional `DESMOS_API_KEY` enables graph rendering. `AUDIT_CAPTURE_CONTENT=false` stores trace metadata without prompt/question content; the default is true with credential redaction.
+Keep the existing active AI provider settings from `.env`. For Azure, these are `AI_PROVIDER=azure`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, and `AZURE_OPENAI_CHAT_DEPLOYMENT_NAME`. Optional `DESMOS_API_KEY` enables graph rendering. `AUDIT_CAPTURE_CONTENT=false` is the default and stores trace metadata without question content. Explicit true retains redacted diagnostic content only in the server database; internal instruction fields are excluded. Trace API responses always contain metadata only, regardless of this setting. The current prototype and repository remain public by owner choice; see [SECURITY.md](SECURITY.md).
 
 ## 2. Initialize Supabase once
 

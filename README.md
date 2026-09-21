@@ -2,7 +2,7 @@
 
 Version: 2026-09-21
 
-See the [technical documentation](DOCUMENTATION.md) for the architecture, backend workflow, guardrails, tests and extension options.
+See the [technical documentation](DOCUMENTATION.md) for the architecture, backend workflow, guardrails, tests and extension options, and the [security review](SECURITY.md) for fixes, verification and the limitations of public access.
 
 For shared hosting, follow [Vercel and Supabase setup](DEPLOYMENT.md). Supabase keeps approved questions, revisions, traces and the source bank across deployments; private Storage holds source PDFs and images. Local SQLite remains available with `STUDIO_STORAGE=local`.
 
@@ -46,7 +46,7 @@ pnpm start
 
 Restart after editing `.env`. Committed bank changes apply to the next reference retrieval; reload the page after adding modules or taxonomy entries. Installation/build, provider generation and Desmos require internet access to their respective services.
 
-For new questions, source retrieval starts only after Generate is clicked. Configuration changes and typing do not trigger source searches. In similar mode, click Browse source questions to load the compatible bank, then select a source. Cloud source-bank reads use one database round trip and a one-minute cache.
+For new questions, source retrieval starts only after Generate is clicked. Configuration changes and typing do not trigger source searches. In similar mode, Browse source questions scrolls to the main Source references section. Use the searchable list and larger preview there to select a source and generate. Temporary failures retry automatically up to three attempts, each with a 20-second timeout; changing filters cancels pending browsing. Sources depend only on module, question type, topic and difficulty. Cloud source-bank reads use one database round trip and a one-minute cache.
 
 ## Configure a provider
 
@@ -102,9 +102,9 @@ The app release date is displayed in the header and maintained in `lib/version.t
 
 SQLite replaces Langfuse and browser question persistence. No external database service or account is required. This replaces the Langfuse integration, but does not stop or uninstall an existing Langfuse Docker stack. The Node server creates its database automatically at `%LOCALAPPDATA%/MSA Question Studio/studio.sqlite` on Windows, or `~/.local/share/MSA Question Studio/studio.sqlite` elsewhere. Set `STUDIO_DB_PATH` in `.env` to use another local persistent path, then restart. Keep the live database outside OneDrive and network shares. SQLite is suited to local application storage; all database access here stays on the app server ([SQLite guidance](https://www.sqlite.org/whentouse.html)).
 
-The database stores approved questions, immutable approved revisions, approval/deletion events, import job status, generation/refinement traces, and individual model calls. **Activity** lets you inspect and download traces. Prompt/source/question content is logged locally by default after credential/image/hidden-reasoning removal. Set `AUDIT_CAPTURE_CONTENT=false` for metadata and usage only. Existing `LANGFUSE_*` settings are ignored; no Langfuse telemetry is sent. Provider calls for question generation and PDF extraction continue to use the configured AI service.
+The database stores approved questions, immutable approved revisions, approval/deletion events, import job status, generation/refinement traces, and individual model calls. **Activity** lets you inspect and download traces. Activity/API downloads expose only metadata and token usage, including for historical records. Content capture is off by default. Explicit `AUDIT_CAPTURE_CONTENT=true` enables redacted diagnostic question data in the server database; internal instruction fields are excluded even then. Existing explicitly enabled settings are unchanged. Existing `LANGFUSE_*` settings are ignored; no Langfuse telemetry is sent. Provider calls for question generation and PDF extraction continue to use the configured AI service.
 
-All users of the same app installation share its repository and trace history, protected by the existing app password. Separate machines do not automatically share a database. This is intended for one Node server with a persistent local disk, not stateless/serverless hosting. To move existing data, stop the app and copy its database together with any remaining `-wal`/`-shm` files before changing `STUDIO_DB_PATH`. Back up the source-bank `data/`, `public/source-questions/`, and `imports/` folders too. The SQLite file is not encrypted by the app; use operating-system access controls/disk encryption where needed. Deleted questions disappear from the repository and cannot be assembled; prior revisions are retained for traceability.
+All users of the same app installation share its repository and trace metadata. This prototype currently remains public by owner choice; there is no app password or staff sign-in. Separate machines do not automatically share a database. This is intended for one Node server with a persistent local disk, not stateless/serverless hosting. To move existing data, stop the app and copy its database together with any remaining `-wal`/`-shm` files before changing `STUDIO_DB_PATH`. Back up the source-bank `data/`, `public/source-questions/`, and `imports/` folders too. The SQLite file is not encrypted by the app; use operating-system access controls/disk encryption where needed. Deleted questions disappear from the repository and cannot be assembled; prior revisions are retained for traceability.
 
 ## Import papers or add a module
 
