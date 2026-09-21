@@ -1,15 +1,14 @@
-import { withBank } from '@/lib/bank-data';
+import { withBank, getBank } from '@/lib/bank-data';
 import { readBody, apiError } from '@/lib/security';
-import { references, retrieve, sourceQuestions } from '@/lib/retrieval';
+import { references, sourceQuestions } from '@/lib/retrieval';
 export async function POST(request: Request) {
   try {
     const raw = await readBody(request);
     return await withBank(() => {
-      const ctx = retrieve(raw),
-        rows = sourceQuestions(raw);
+      const rows = sourceQuestions(raw);
       return Response.json(
         {
-          references: references({ ...ctx, examples: rows }),
+          references: references({ examples: rows, images: getBank().images, brief: { subtopics: rows.map(q => q.subtopic_id) } }),
           exactExamples: rows.length,
         },
         { headers: { 'Cache-Control': 'no-store' } },

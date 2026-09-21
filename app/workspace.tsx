@@ -26,6 +26,7 @@ import 'katex/dist/katex.min.css';
 import { svgDiagram } from '@/lib/diagram';
 import { type Brief } from '@/lib/schema';
 import { formulasForBrief } from '@/lib/formula-catalog';
+import { sourceRequest } from '@/lib/source-selection';
 import { APP_VERSION } from '@/lib/version';
 import { configurationIssues } from '@/lib/configuration';
 import { studioApi } from '@/lib/client-api';
@@ -260,26 +261,26 @@ export default function Workspace({
     module,
     topic,
     subtopics:
-      questionType === 'MCQ' && generationMode === 'new'
+      questionType === 'MCQ' || generationMode === 'similar'
         ? topics.filter((t) => t.parent === topic).map((t) => t.id)
         : subs,
     questionType,
     creativeContext: newStructured && creative,
     useFormulaSheet:
-      questionType === 'Structured' &&
+      newStructured &&
       difficulty === 'Challenging' &&
       useFormulaSheet &&
       !!formulasForBrief({ module, subtopics: subs }),
     nonRoutine:
-      questionType === 'Structured' &&
+      newStructured &&
       difficulty === 'Challenging' &&
       nonRoutine,
     autoParts: newStructured && multiple && autoParts,
     multipleParts: newStructured && multiple,
     partCount: newStructured && multiple && !autoParts ? Number(partCount) : 2,
     totalMarks:
-      questionType === 'MCQ' ? 2 : difficulty === 'Basic' ? 10 : Number(marks),
-    difficulty: questionType === 'MCQ' ? 'Intermediate' : difficulty,
+      questionType === 'MCQ' ? 2 : generationMode === 'similar' ? 10 : difficulty === 'Basic' ? 10 : Number(marks),
+    difficulty: questionType === 'MCQ' && generationMode === 'new' ? 'Intermediate' : difficulty,
     specifications: generationMode === 'similar' ? '' : spec,
   };
   const availableFormulas = formulasForBrief(brief);
@@ -292,6 +293,7 @@ export default function Workspace({
       Number(partCount) >= 2 &&
       Number(partCount) <= 6);
   const validMarks =
+    generationMode === 'similar' ||
     questionType === 'MCQ' ||
     (marks.trim() !== '' &&
       Number.isSafeInteger(Number(marks)) &&
@@ -301,12 +303,13 @@ export default function Workspace({
     subOptions.length > 0 && subOptions.every((t) => subs.includes(t.id));
   const requestId = useRef(0);
   const abort = useRef<AbortController | null>(null);
-  const browseKey = JSON.stringify({
+  const sourceFilter = {
     module,
     topic,
     questionType,
-    subtopics: [...brief.subtopics].sort(),
-  });
+    difficulty,
+  };
+  const browseKey = sourceRequest(sourceFilter);
   const sourceSelectionValid = sourceKey === browseKey && !!selectedSource;
   async function browseSources() {
     if (configIssues.length || referencesLoading) return;
@@ -318,7 +321,7 @@ export default function Workspace({
       const response = await fetch('/api/source-questions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(brief),
+        body: browseKey,
         signal: AbortSignal.timeout(20000),
       });
       const data = await readServiceJSON(response, 'Source browsing');
@@ -391,7 +394,7 @@ export default function Workspace({
       const batchId = isEdit ? history!.activeId! : crypto.randomUUID();
       const d: any = await generationRequest(
         JSON.stringify({
-          brief: isEdit ? result?.effectiveBrief : brief,
+          brief: isEdit ? result?.effectiveBrief : generationMode === 'similar' ? sourceFilter : brief,
           mode: isEdit ? 'new' : generationMode,
           sourceQuestionId: isEdit
             ? result?.sourceQuestionId
@@ -685,9 +688,9 @@ export default function Workspace({
             />
             {questionType === 'MCQ' && (
               <p className="hint">
-                Three conceptual candidates from the main topic · four options ·
-                one correct answer · Intermediate or above · 2 marks, all or
-                nothing.
+                {generationMode === 'similar'
+                  ? 'Three conceptual candidates adapted from your selected source at its difficulty. Four options, one correct answer, 2 marks each.'
+                  : 'Three conceptual candidates from the main topic. Four options, one correct answer, Intermediate or above, 2 marks each.'}
               </p>
             )}
             <Choice
@@ -706,8 +709,7 @@ export default function Workspace({
                 );
               }}
             />
-            {(questionType === 'Structured' ||
-              generationMode === 'similar') && (
+            {newStructured && (
               <div className="field">
                 <span id="subtopics-label">Sub-topics</span>
                 <div
@@ -750,7 +752,7 @@ export default function Workspace({
                 )}
               </div>
             )}
-            {questionType === 'Structured' && (
+            {(questionType === 'Structured' || generationMode === 'similar') && (
               <>
                 <Choice
                   label="Difficulty"
@@ -765,7 +767,7 @@ export default function Workspace({
                     if (v === 'Basic') setMarks('10');
                   }}
                 />
-                <label className="field">
+                {newStructured && <label className="field">
                   Total marks
                   <Input
                     type="number"
@@ -784,10 +786,10 @@ export default function Workspace({
                         ? 'Whole numbers, minimum 1. Exact marks are prioritised; any necessary adjustments are explained with the question.'
                         : 'Enter a whole number of marks of at least 1.'}
                   </span>
-                </label>
+                </label>}
               </>
             )}
-            {questionType === 'Structured' && difficulty === 'Challenging' && (
+            {newStructured && difficulty === 'Challenging' && (
               <div>
                 <label className="subtopic-option" htmlFor="brief-non-routine">
                   <Checkbox
@@ -911,8 +913,11 @@ export default function Workspace({
               </label>
             ) : (
               <p className="hint">
-                Generate the similar question first. You can make any
-                refinements afterward using Refine draft and recheck.
+                The first similar question uses the source's sub-topics,
+                difficulty and marks, including Basic sources. AI assigns marks
+                when the source has none; MCQs remain 2 marks. Request any changes
+                to difficulty, marks or structure afterward using Refine draft
+                and recheck.
               </p>
             )}
             {generationMode === 'similar' && (
@@ -1198,6 +1203,7 @@ export default function Workspace({
             result.draft.question_type === 'Structured' &&
             (result.feasibility.omitted_subtopics.length > 0 ||
               result.effectiveBrief.totalMarks !== result.brief.totalMarks ||
+              result.effectiveBrief.difficulty !== result.brief.difficulty ||
               result.feasibility.specification_adjustments.length > 0) && (
               <div role="alert" className="error">
                 <strong>Configuration adjustments and recommendations</strong>
@@ -1215,16 +1221,19 @@ export default function Workspace({
                 result.brief.totalMarks ? (
                   <p>
                     <strong>
-                      Marks: requested {result.brief.totalMarks}, generated{' '}
-                      {result.effectiveBrief.totalMarks}.
+                      {result.generationMode === 'similar'
+                        ? `Marks after generation/refinement: ${result.effectiveBrief.totalMarks}.`
+                        : `Marks: requested ${result.brief.totalMarks}, generated ${result.effectiveBrief.totalMarks}.`}
                     </strong>{' '}
                     {result.feasibility.marks_reason}
                   </p>
                 ) : (
                   <p>
-                    Your exact total of {result.brief.totalMarks} marks was
-                    retained.
+                    The total of {result.brief.totalMarks} marks was retained.
                   </p>
+                )}
+                {result.effectiveBrief.difficulty !== result.brief.difficulty && (
+                  <p>Difficulty: {result.brief.difficulty} to {result.effectiveBrief.difficulty}.</p>
                 )}
                 {result.feasibility.specification_adjustments.map(
                   (message, i) => (
@@ -1232,10 +1241,9 @@ export default function Workspace({
                   ),
                 )}
                 <p className="hint">
-                  Recommendation: narrow the selected sub-topics, increase the
-                  marks if broader coverage is essential, or revise conflicting
-                  specifications, then generate again. These adjustments are AI
-                  assessments; review them alongside the question.
+                  {result.generationMode === 'similar'
+                    ? 'Review the assigned marks or requested refinements alongside the question. Use Refine draft and recheck for further changes.'
+                    : 'Recommendation: narrow the selected sub-topics, increase the marks if broader coverage is essential, or revise conflicting specifications, then generate again. Review these AI assessments alongside the question.'}
                 </p>
               </div>
             )}

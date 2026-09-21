@@ -1,4 +1,4 @@
-import { briefSchema } from './schema';
+import { briefSchema, storedBriefSchema } from './schema';
 export type ConfigurationIssue = {
   field: string;
   error: string;
@@ -8,8 +8,9 @@ type Topic = { id: string; parent: string; module: string; level: string };
 export function configurationIssues(
   raw: unknown,
   topics: Topic[],
+  preserveConfiguration = false,
 ): ConfigurationIssue[] {
-  const parsed = briefSchema.safeParse(raw);
+  const parsed = (preserveConfiguration ? storedBriefSchema : briefSchema).safeParse(raw);
   const hints: Record<string, string> = {
     module: 'Choose an available module.',
     topic: 'Choose an active topic in the selected module.',

@@ -29,7 +29,7 @@ import { loadPrompts } from '../lib/prompts';
 import { configurationIssues } from '../lib/configuration';
 import { getBank } from '../lib/bank-data';
 import { retrieve } from '../lib/retrieval';
-import { selectBase } from '../lib/similar';
+import { selectBase, similarBrief } from '../lib/similar';
 import { generate, validateDraft } from '../lib/generation';
 import { worksheetDocument } from '../lib/word';
 import { referenceRequest } from '../lib/reference-request';
@@ -458,7 +458,7 @@ try {
   assert.throws(() => loadPrompts('../EM1'));
   fixture.brief.difficulty = fixture.effectiveBrief.difficulty = 'Intermediate';
   const ctx = retrieve(fixture.brief);
-  const base = ctx.examples.find((q) => q.question_type === 'Written')!;
+  const base = ctx.examples.find((q) => q.question_type === 'Written' && q.perceived_difficulty === ctx.brief.difficulty)!;
   assert.equal(
     selectBase(ctx, { mode: 'similar', sourceIds: [base.question_id] })
       ?.question_id,
@@ -476,6 +476,10 @@ try {
   );
   if (ctx.examples.filter((q) => q.question_type === 'Written').length > 1)
     assert(selected.size > 1);
+  const sourceConfig = similarBrief(fixture.brief, false, base);
+  fixture.brief = fixture.effectiveBrief = sourceConfig;
+  fixture.feasibility = { ...fixture.feasibility, selected_subtopics: sourceConfig.subtopics, total_marks: sourceConfig.totalMarks };
+  fixture.draft = { ...fixture.draft, total_marks: sourceConfig.totalMarks, syllabus_ids: sourceConfig.subtopics, solutions: fixture.draft.solutions.map(solution => ({ ...solution, marking: [{ part: '', criterion: 'Complete fixture solution', marks: sourceConfig.totalMarks }] })) };
   const received: {
     generation_mode: string;
     base_reference: { id: string };

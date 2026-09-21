@@ -43,8 +43,8 @@ export function SourceBrowser({
         {loading ? 'Loading source questions…' : 'Browse source questions'}
       </Button>
       <p className="hint">
-        Sources load only on request. Changing topic or sub-topics requires
-        browsing again.
+        Sources match your module, question type, topic and difficulty. Changing
+        any of these requires browsing again.
       </p>
       {error && (
         <p className="error" role="alert">
@@ -87,7 +87,7 @@ export function SourceBrowser({
                   {ref.difficulty} ·{' '}
                   {ref.totalMarks
                     ? ref.totalMarks + ' marks'
-                    : 'Marks unstated'}
+                    : 'Marks unstated; AI will assign marks'}
                 </p>
                 <details>
                   <summary>View source question and solution</summary>
@@ -121,8 +121,8 @@ export function SourceBrowser({
             ))}
             {!filtered.length && (
               <p>
-                No compatible source questions found. Adjust the topic,
-                sub-topics or filter.
+                No compatible source questions found. Adjust the module,
+                question type, topic, difficulty or text filter.
               </p>
             )}
           </section>

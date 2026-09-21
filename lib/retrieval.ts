@@ -2,9 +2,10 @@ import { getBank, getReferenceCrops } from './bank-data';
 import { configurationIssues } from './configuration';
 import { HttpError } from './security';
 import {briefSchema,storedBriefSchema} from './schema';
+import { sourceFilterSchema } from './source-selection';
 export function retrieve(raw:unknown,preserveConfiguration=false){
  const bank=getBank();
- const issues=configurationIssues(raw,bank.topics.filter(t=>t.status==='Active').map(t=>({id:t.taxonomy_id,parent:t.parent_id,module:t.module_id,level:t.level})));
+ const issues=configurationIssues(raw,bank.topics.filter(t=>t.status==='Active').map(t=>({id:t.taxonomy_id,parent:t.parent_id,module:t.module_id,level:t.level})),preserveConfiguration);
  if(issues.length)throw new HttpError(422,issues.map(i=>i.field+': '+i.error+' Recommendation: '+i.recommendation).join(' '));
  const b=(preserveConfiguration?storedBriefSchema:briefSchema).parse(raw);const active=bank.topics.filter(t=>t.status==='Active');const topic=active.find(t=>t.taxonomy_id===b.topic&&t.level==='Topic'&&t.module_id===b.module);const subs=active.filter(t=>b.subtopics.includes(t.taxonomy_id)&&t.parent_id===b.topic);
  const matches=(q:typeof bank.questions[number],id:string)=>q.subtopic_id===id||(q.additional_subtopic_ids_json as string[]).includes(id);
@@ -26,11 +27,14 @@ export function retrieve(raw:unknown,preserveConfiguration=false){
 }
 // Browse the entire compatible bank, independently of the ranked few-shot limit.
 export function sourceQuestions(raw: unknown) {
- const ctx=retrieve(raw);
- const activeIds=new Set(getBank().topics.filter(t=>t.status==='Active').map(t=>t.taxonomy_id));
- return getBank().questions.filter(q=>q.module_id===ctx.brief.module&&q.topic_id===ctx.brief.topic&&q.record_status==='Active'&&q.retrieval_status==='Eligible'&&q.question_type===(ctx.brief.questionType==='MCQ'?'MCQ':'Written')&&[q.topic_id,q.subtopic_id,...q.additional_subtopic_ids_json].every(id=>activeIds.has(id))&&ctx.brief.subtopics.some(id=>q.subtopic_id===id||(q.additional_subtopic_ids_json as string[]).includes(id))).sort((a,b)=>a.question_id.localeCompare(b.question_id));
+ const filter=sourceFilterSchema.parse(raw), bank=getBank();
+ const active=bank.topics.filter(t=>t.status==='Active');
+ if(!active.some(t=>t.taxonomy_id===filter.topic&&t.module_id===filter.module&&t.level==='Topic'))
+  throw new HttpError(422,'Choose an active topic in the selected module.');
+ const activeIds=new Set(active.map(t=>t.taxonomy_id));
+ return bank.questions.filter(q=>q.module_id===filter.module&&q.topic_id===filter.topic&&q.record_status==='Active'&&q.retrieval_status==='Eligible'&&q.question_type===(filter.questionType==='MCQ'?'MCQ':'Written')&&q.perceived_difficulty===filter.difficulty&&[q.topic_id,q.subtopic_id,...q.additional_subtopic_ids_json].every(id=>activeIds.has(id))).sort((a,b)=>a.question_id.localeCompare(b.question_id));
 }
-export function references(context:ReturnType<typeof retrieve>){return context.examples.map(q=>({id:q.question_id,questionType:q.question_type==='MCQ'?'MCQ' as const:'Structured' as const,label:`${q.paper_type} AY${q.academic_year} S${q.semester} · ${q.source_question}`,question:q.question,solution:q.solution,alternatives:[q.alternative_solution_1,q.alternative_solution_2,q.alternative_solution_3].filter(Boolean),difficulty:q.perceived_difficulty,totalMarks:q.question_marks||null,parentMarks:q.parent_question_marks||null,screenshots:getReferenceCrops()[q.question_id]||[],marking:q.marking_scheme_json,alternativeMarking:[q.alternative_marking_scheme_1_json,q.alternative_marking_scheme_2_json,q.alternative_marking_scheme_3_json],images:[...q.images_json,...q.solution_images_json].map(name=>({name,url:context.images[name]})),match:context.brief.subtopics.some(id=>q.subtopic_id===id||(q.additional_subtopic_ids_json as string[]).includes(id))?'Exact sub-topic':'Related topic'}));}
+export function references(context:Pick<ReturnType<typeof retrieve>,'examples'|'images'>&{brief:{subtopics:string[]}}){return context.examples.map(q=>({id:q.question_id,questionType:q.question_type==='MCQ'?'MCQ' as const:'Structured' as const,label:`${q.paper_type} AY${q.academic_year} S${q.semester} · ${q.source_question}`,question:q.question,solution:q.solution,alternatives:[q.alternative_solution_1,q.alternative_solution_2,q.alternative_solution_3].filter(Boolean),difficulty:q.perceived_difficulty,totalMarks:q.question_marks||null,parentMarks:q.parent_question_marks||null,screenshots:getReferenceCrops()[q.question_id]||[],marking:q.marking_scheme_json,alternativeMarking:[q.alternative_marking_scheme_1_json,q.alternative_marking_scheme_2_json,q.alternative_marking_scheme_3_json],images:[...q.images_json,...q.solution_images_json].map(name=>({name,url:context.images[name]})),match:context.brief.subtopics.some(id=>q.subtopic_id===id||(q.additional_subtopic_ids_json as string[]).includes(id))?'Exact sub-topic':'Related topic'}));}
 
 
 // MCQ users choose a main topic; hidden or stale sub-topic selections cannot narrow it.

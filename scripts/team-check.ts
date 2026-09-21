@@ -284,7 +284,7 @@ try {
   );
   assert.throws(
     () => selectBase(ctx, { mode: 'similar', sourceQuestionId: 'missing' }),
-    /no longer eligible/,
+    /no longer matches/,
   );
   assert.throws(
     () =>
@@ -292,7 +292,7 @@ try {
         mode: 'similar',
         sourceQuestionId: beyond.question_id,
       }),
-    /no longer eligible/,
+    /no longer matches/,
   );
   const sourceResponse = await sourceRoute(request(ctx.brief));
   assert.equal(sourceResponse.status, 200);
@@ -402,14 +402,14 @@ try {
       numbers: false,
       context: true,
     });
-    assert(input.available_formula_sheet.entries.length);
+    assert.equal(input.available_formula_sheet, null);
     calls++;
     const value =
       stage === 'marks_feasibility'
-        ? { ...fixture.feasibility, selected_subtopics: ctx.brief.subtopics }
+        ? { ...fixture.feasibility, selected_subtopics: input.brief.subtopics, total_marks: input.brief.totalMarks, difficulty: input.brief.difficulty }
         : stage === 'review'
           ? goodReview
-          : { ...fixture.draft, syllabus_ids: ctx.brief.subtopics };
+          : { ...fixture.draft, syllabus_ids: input.brief.subtopics, total_marks: input.brief.totalMarks, solutions: [{ ...fixture.draft.solutions[0], marking: [{ ...fixture.draft.solutions[0].marking[0], marks: input.brief.totalMarks }] }] };
     return Response.json({
       output: [
         {
@@ -433,7 +433,7 @@ try {
     },
   );
   assert.equal(similar.sourceQuestionId, beyond.question_id);
-  assert(similar.formulaSheet);
+  assert.equal(similar.formulaSheet, undefined);
   assert.equal(calls, 3);
   assert(
     !reviewSchema.safeParse({

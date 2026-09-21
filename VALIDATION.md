@@ -1,5 +1,15 @@
 # Migration validation
 
+## Source-led similar questions: 21 September 2026
+
+Similar mode now filters source questions by module, question type, topic and difficulty, without sub-topic or total-mark controls. The server ignores stale hidden fields and revalidates the selected source against all four filters. Empty matches return an empty list. The initial variant retains source scope, difficulty and recorded marks, including Basic/fractional totals; the planner assigns marks when the source is unmarked. MCQs remain 2 marks. New-mode Basic Structured questions remain 10 marks. Non-routine, formula-sheet and structure controls apply only to new questions; subsequent similar-question changes are explicit refinements.
+
+The planning schema records effective difficulty. Explicit similar refinements can update marks/difficulty, and later wording refinements retain those updated settings and the original source provenance. Repository approval, refinement history and legacy snapshots support fractional source totals.
+
+TypeScript, the complete regression suite, focused lint, `git diff --check` and the Vercel production build passed. `similar-check.ts` covers exact four-field source matching, invalidated/stale selection, empty results, ignored hidden values, Basic/fractional source marks, AI allocation for unmarked sources, fixed first-generation scope/marks/difficulty, all three Basic MCQ candidates, explicit refinements, subsequent provenance and saved history. Existing new-question and worksheet checks pass. Browser visual verification remains outstanding. No database migration or environment-variable changes are required.
+
+A live Azure first generation retained source `EM1-MST-2526-S1-4-a` at Basic and 4 marks. The first requested Intermediate/6-mark refinement was withheld because review judged that splitting a routine calculation did not raise its cognitive demand. The prompt now explicitly requires interpretation or reasoning for a difficulty increase; a retry of the same refinement passed, with effective difficulty Intermediate, 6 marks and the original source ID retained. Artifacts are `test-output/similar-live-original.json` and `test-output/similar-live-refined.json`. This is one live source/refinement pair, not exhaustive coverage of all sources or difficulty changes.
+
 ## Team feedback and shared formula sheet: 21 September 2026
 
 Implemented conceptual 2-mark MCQs, fixed 10-mark Basic Structured questions, optional Challenging non-routine tasks, grounded scope/context/preservation review, explicitly saved module terminology rules, refinement comparison/restoration, selected-source browsing, saved worksheet membership and prominent section controls. New-question source retrieval runs on Generate; similar-source browsing is an explicit action. Each generated result retains the formula-sheet identity, applied wording rules and review evidence.

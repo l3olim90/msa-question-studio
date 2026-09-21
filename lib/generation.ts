@@ -17,13 +17,14 @@ import {
   draftSchema,
   reviewSchema,
   feasibilitySchema,
+  generationPlanSchema,
   jsonSchema,
   type Draft,
 } from './schema';
 import { retrieve, references } from './retrieval';
 import { calculate } from './calculator';
-import { selectBase, similarBrief, type GenerationOptions } from './similar';
-import { sourceQuestions } from './retrieval';
+import { selectBase, similarBrief, refinementSource, type GenerationOptions } from './similar';
+import { sourceMarkTotal } from './source-selection';
 import { listTerminology, terminologyIssues } from './terminology';
 import { formulasForBrief } from './formula-catalog';
 import { verifyFormulaSource } from './formula-source';
@@ -177,16 +178,15 @@ async function generateInBank(
     options.mode === 'similar' || (previous && options.sourceQuestionId)
       ? 'similar'
       : 'new';
-  const requested = retrieve(
-    mode === 'similar' ? similarBrief(raw, !!previous) : raw,
-  );
   const base = previous
     ? options.sourceQuestionId
-      ? sourceQuestions(requested.brief).find(
-          (q) => q.question_id === options.sourceQuestionId,
-        )
+      ? refinementSource(raw, options.sourceQuestionId)
       : undefined
-    : selectBase(requested, options);
+    : selectBase({ brief: raw }, options);
+  const requested = retrieve(
+    mode === 'similar' ? similarBrief(raw, !!previous, base) : raw,
+    mode === 'similar',
+  );
   if (
     base &&
     !requested.examples.some((q) => q.question_id === base.question_id)
@@ -195,6 +195,8 @@ async function generateInBank(
   const terminologyRules = await listTerminology(requested.brief.module);
   if (requested.brief.useFormulaSheet) verifyFormulaSource();
   const generationContext = {
+    is_refinement: !!previous,
+    source_marks: sourceMarkTotal(base?.question_marks),
     generation_mode:
       base || (previous && options.sourceQuestionId) ? 'similar' : 'new',
     base_reference: base ? promptExamples([base])[0] : null,
@@ -334,15 +336,17 @@ async function generateInBank(
         type: 'json_schema',
         name: 'marks_feasibility',
         strict: true,
-        schema: jsonSchema(feasibilitySchema),
+        schema: jsonSchema(generationPlanSchema),
       },
     },
   };
+  const planningPolicy = { mode, refining: !!previous, sourceMarks: sourceMarkTotal(base?.question_marks) };
   let feasibility = validatePlan(
     readJSON(await response(key, planBody)),
     requested,
+    planningPolicy,
   );
-  if (feasibility.total_marks !== requested.brief.totalMarks) {
+  if (mode !== 'similar' && feasibility.total_marks !== requested.brief.totalMarks) {
     // Reconsider every proposed marks change before accepting a departure from the user's priority.
     feasibility = validatePlan(
       readJSON(
@@ -364,14 +368,16 @@ async function generateInBank(
         }),
       ),
       requested,
+      planningPolicy,
     );
   }
   ctx = retrieve({
     ...requested.brief,
     subtopics: feasibility.selected_subtopics,
     totalMarks: feasibility.total_marks,
+    difficulty: feasibility.difficulty ?? requested.brief.difficulty,
     specifications: feasibility.resolved_specifications,
-  });
+  }, mode === 'similar');
   generationContext.available_formula_sheet = ctx.brief.useFormulaSheet
     ? formulasForBrief(ctx.brief)
     : null;
@@ -781,12 +787,23 @@ async function generateInBank(
   };
 }
 
-export function validatePlan(value: unknown, ctx: ReturnType<typeof retrieve>) {
+export function validatePlan(value: unknown, ctx: ReturnType<typeof retrieve>, policy: { mode: string; refining: boolean; sourceMarks: number | null } = { mode: 'new', refining: false, sourceMarks: null }) {
   const plan = feasibilitySchema.parse(value);
+  if (policy.mode !== 'similar' && !Number.isSafeInteger(plan.total_marks))
+    throw new Error('New-question plans must use a whole number of marks.');
+  if ((policy.mode !== 'similar' || !policy.refining) && plan.difficulty && plan.difficulty !== ctx.brief.difficulty)
+    throw new Error('The first generation must retain the selected difficulty. Change difficulty through an explicit refinement.');
+  if (policy.mode === 'similar' && !policy.refining) {
+    if (policy.sourceMarks !== null && ctx.brief.questionType !== 'MCQ' && plan.total_marks !== policy.sourceMarks)
+      throw new Error('The first similar question must retain the source marks. Change marks through an explicit refinement.');
+    if (plan.selected_subtopics.length !== ctx.brief.subtopics.length || plan.omitted_subtopics.length)
+      throw new Error('The first similar question must retain the source scope.');
+  }
   if (ctx.brief.questionType === 'MCQ' && plan.total_marks !== 2)
     throw new Error('MCQ plans must retain exactly 2 marks.');
   if (
     ctx.brief.questionType === 'Structured' &&
+    policy.mode !== 'similar' &&
     ctx.brief.difficulty === 'Basic' &&
     plan.total_marks !== 10
   )
