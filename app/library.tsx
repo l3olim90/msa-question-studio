@@ -12,7 +12,7 @@ import type {
   SavedWorksheetSummary,
 } from '@/lib/saved-worksheets';
 import { reorderQuestion } from '@/lib/worksheet';
-import { GripVertical } from 'lucide-react';
+import { Download, GripVertical } from 'lucide-react';
 import type { Topic } from './studio';
 
 type Section = { id: string; name: string; questions: RepositorySummary[] };
@@ -80,6 +80,10 @@ export function Library({
     title.trim() &&
     sections.every((s) => s.name.trim()) &&
     selected.length <= 100;
+  const exportDisabled =
+    busy ||
+    !title.trim() ||
+    sections.some((s) => !s.name.trim() || !s.questions.length);
   async function loadSaved() {
     const data = await studioApi<{ worksheets: SavedWorksheetSummary[] }>(
       '/api/worksheets/saved',
@@ -324,9 +328,28 @@ export function Library({
               : 'Assemble a worksheet'}
           </h1>
         </div>
-        <Button variant="outline" disabled={busy} onClick={() => act(load)}>
-          Refresh repository
-        </Button>
+        {view === 'repository' ? (
+          <Button variant="outline" disabled={busy} onClick={() => act(load)}>
+            Refresh repository
+          </Button>
+        ) : (
+          <div className="export-control">
+            <Button
+              className="export-word"
+              disabled={exportDisabled}
+              onClick={() => exportPaper(false)}
+            >
+              <Download size={20} aria-hidden="true" /> Export student Word
+            </Button>
+            <Button
+              className="export-word"
+              disabled={exportDisabled}
+              onClick={() => exportPaper(true)}
+            >
+              <Download size={20} aria-hidden="true" /> Export lecturer Word
+            </Button>
+          </div>
+        )}
       </div>
       {error && (
         <p className="error" role="alert">
@@ -337,71 +360,6 @@ export function Library({
       {busy && (
         <output className="manager-progress">Preparing your request…</output>
       )}
-      <div className="section-setup" aria-label="Define worksheet sections">
-        <div>
-          <h2>1. Define sections</h2>
-          <p className="hint">
-            Name your sections, then choose where repository questions are
-            added.
-          </p>
-        </div>
-        <div className="section-setup-fields">
-          <label className="field">
-            Section to fill
-            <select value={target} onChange={(e) => setTarget(e.target.value)}>
-              {sections.map((section) => (
-                <option key={section.id} value={section.id}>
-                  {section.name || 'Unnamed section'} |{' '}
-                  {section.questions.length} questions
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field" htmlFor="section-setup-name">
-            Section name
-            <Input
-              id="section-setup-name"
-              maxLength={100}
-              value={sections.find((s) => s.id === target)?.name || ''}
-              onChange={(e) =>
-                setSections((current) =>
-                  current.map((s) =>
-                    s.id === target ? { ...s, name: e.target.value } : s,
-                  ),
-                )
-              }
-            />
-          </label>
-          <Button
-            variant="outline"
-            disabled={busy || sections.length >= 20}
-            onClick={() => {
-              const id = crypto.randomUUID();
-              setSections((current) => [
-                ...current,
-                {
-                  id,
-                  name: `Section ${String.fromCharCode(65 + current.length)}`,
-                  questions: [],
-                },
-              ]);
-              setTarget(id);
-            }}
-          >
-            Add section
-          </Button>
-          <Button
-            disabled={busy}
-            onClick={() =>
-              onView(view === 'repository' ? 'worksheet' : 'repository')
-            }
-          >
-            {view === 'repository'
-              ? `View worksheet (${selected.length})`
-              : '2. Choose repository questions'}
-          </Button>
-        </div>
-      </div>
       {view === 'repository' ? (
         <>
           <p className="hint">
@@ -583,11 +541,22 @@ export function Library({
             section; the position and section menus also work with a keyboard or
             touch.
           </p>
+          <p className="hint">
+            Student copy: questions and answer key. Lecturer copy: each question
+            followed by its main and alternative solutions and marking
+            allocations, with an answer key at the end. Older questions without
+            a concise key use their main solution in the answer key.
+          </p>
           <fieldset disabled={busy}>
-            <div className="worksheet-saved">
-              <label className="field">
-                Saved worksheets
+            <section
+              className="repository-card"
+              aria-labelledby="saved-worksheets-heading"
+            >
+              <h2 id="saved-worksheets-heading">Saved worksheets</h2>
+              <label className="field" htmlFor="saved-worksheet">
+                Choose a saved worksheet
                 <select
+                  id="saved-worksheet"
                   value={savedId}
                   onChange={(e) => setSavedId(e.target.value)}
                 >
@@ -689,43 +658,116 @@ export function Library({
                   ? `Editing “${opened.title}” · ${dirty ? 'Unsaved changes' : 'Saved'}`
                   : 'New worksheet · Not yet saved'}
               </p>
-            </div>
-            <label htmlFor={'library-field-2'} className="field">
-              Worksheet title
-              <Input
-                id={'library-field-2'}
-                maxLength={150}
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-              />
-            </label>
-            <div className="row-actions">
-              <label>
-                <input
-                  type="checkbox"
-                  checked={includeName}
-                  onChange={(e) => setIncludeName(e.target.checked)}
-                />{' '}
-                Name field
+            </section>
+            <section
+              className="repository-card"
+              aria-labelledby="worksheet-details-heading"
+            >
+              <h2 id="worksheet-details-heading">Worksheet details</h2>
+              <label htmlFor={'library-field-2'} className="field">
+                Worksheet title
+                <Input
+                  id={'library-field-2'}
+                  maxLength={150}
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                />
               </label>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={includeClass}
-                  onChange={(e) => setIncludeClass(e.target.checked)}
-                />{' '}
-                Class field
+              <div className="row-actions">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={includeName}
+                    onChange={(e) => setIncludeName(e.target.checked)}
+                  />{' '}
+                  Name field
+                </label>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={includeClass}
+                    onChange={(e) => setIncludeClass(e.target.checked)}
+                  />{' '}
+                  Class field
+                </label>
+              </div>
+              <label htmlFor={'library-field-3'} className="field">
+                Instructions for students
+                <Textarea
+                  id={'library-field-3'}
+                  value={instructions}
+                  maxLength={5000}
+                  onChange={(e) => setInstructions(e.target.value)}
+                />
               </label>
-            </div>
-            <label htmlFor={'library-field-3'} className="field">
-              Instructions for students
-              <Textarea
-                id={'library-field-3'}
-                value={instructions}
-                maxLength={5000}
-                onChange={(e) => setInstructions(e.target.value)}
-              />
-            </label>
+            </section>
+            <section
+              className="repository-card"
+              aria-labelledby="worksheet-sections-heading"
+            >
+              <div>
+                <h2 id="worksheet-sections-heading">Define / add sections</h2>
+                <p className="hint">
+                  Name your sections, then choose where repository questions are
+                  added.
+                </p>
+              </div>
+              <div className="manager-tools">
+                <label className="field" htmlFor="worksheet-section-target">
+                  Section to fill
+                  <select
+                    id="worksheet-section-target"
+                    value={target}
+                    onChange={(e) => setTarget(e.target.value)}
+                  >
+                    {sections.map((section) => (
+                      <option key={section.id} value={section.id}>
+                        {section.name || 'Unnamed section'} |{' '}
+                        {section.questions.length} questions
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field" htmlFor="section-setup-name">
+                  Section name
+                  <Input
+                    id="section-setup-name"
+                    maxLength={150}
+                    value={sections.find((s) => s.id === target)?.name || ''}
+                    onChange={(e) =>
+                      setSections((current) =>
+                        current.map((s) =>
+                          s.id === target ? { ...s, name: e.target.value } : s,
+                        ),
+                      )
+                    }
+                  />
+                </label>
+              </div>
+              <div className="row-actions">
+                <Button
+                  variant="outline"
+                  disabled={sections.length >= 20}
+                  onClick={() => {
+                    const id = crypto.randomUUID();
+                    setSections((current) => [
+                      ...current,
+                      {
+                        id,
+                        name: `Section ${String.fromCharCode(65 + current.length)}`,
+                        questions: [],
+                      },
+                    ]);
+                    setTarget(id);
+                  }}
+                >
+                  Add section
+                </Button>
+                <Button variant="outline" onClick={() => onView('repository')}>
+                  Choose repository questions
+                </Button>
+              </div>
+            </section>
             {sections.map((section, i) => (
               <article className="repository-card" key={section.id}>
                 <label
@@ -963,35 +1005,6 @@ export function Library({
                 {selected.length} questions ·{' '}
                 {selected.reduce((n, q) => n + q.marks, 0)} marks
               </strong>
-            </div>
-            <p className="hint">
-              Student copy: questions and answer key. Lecturer copy: each
-              question followed by its main and alternative solutions and
-              marking allocations, with an answer key at the end. Older
-              questions without a concise key use their main solution in the
-              answer key.
-            </p>
-            <div className="row-actions">
-              <Button
-                disabled={
-                  busy ||
-                  !title.trim() ||
-                  sections.some((s) => !s.name.trim() || !s.questions.length)
-                }
-                onClick={() => exportPaper(false)}
-              >
-                Export student Word
-              </Button>
-              <Button
-                disabled={
-                  busy ||
-                  !title.trim() ||
-                  sections.some((s) => !s.name.trim() || !s.questions.length)
-                }
-                onClick={() => exportPaper(true)}
-              >
-                Export lecturer Word
-              </Button>
             </div>
           </fieldset>
         </>
