@@ -6,6 +6,8 @@ See the [technical documentation](DOCUMENTATION.md) for the architecture, backen
 
 For shared hosting, follow [Vercel and Supabase setup](DEPLOYMENT.md). Supabase keeps approved questions, revisions, traces and the source bank across deployments; private Storage holds source PDFs and images. Local SQLite remains available with `STUDIO_STORAGE=local`.
 
+Repository saves commit the question, revision history and audit event together and return a compact confirmation. Lists load summary data, and worksheet assembly reads its selected questions together. See the [repository implementation and measured performance](DOCUMENTATION.md#approved-repository-and-paper-assembly) for details and the optional live Supabase verification command.
+
 The file-based source-bank and live prompt-editing instructions below describe local operation. In Supabase mode the runtime source bank comes from PostgreSQL; on Vercel, prompt-file edits require a new deployment. `pnpm cloud seed` adds new source IDs without overwriting existing cloud records.
 
 Generate syllabus-grounded questions from verified EXAM/MST examples, review solutions, refine questions and export editable Word documents. EM1 is included; the import workflow supports additional modules such as EM2.

@@ -8,7 +8,8 @@ import {
 } from '@/lib/repository';
 const headers = { 'Cache-Control': 'no-store' };
 export async function GET(request: Request) {
-  try {    const query = new URL(request.url).searchParams;
+  try {
+    const query = new URL(request.url).searchParams;
     return Response.json(
       query.has('id')
         ? await getQuestion(z.uuid().parse(query.get('id')))
@@ -35,7 +36,12 @@ export async function POST(request: Request) {
       })
       .strict()
       .parse(await readBody(request, 20_000_000));
-    return Response.json(await approveQuestion(body.result, body.id, body.revision), {
+    const { result: _result, ...summary } = await approveQuestion(
+      body.result,
+      body.id,
+      body.revision,
+    );
+    return Response.json(summary, {
       headers,
     });
   } catch (error) {

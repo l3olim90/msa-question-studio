@@ -17,7 +17,8 @@
     "cloud": "node --env-file-if-exists=.env scripts/run.mjs cloud",
     "worker": "node --env-file-if-exists=.env scripts/run.mjs cloud-worker",
     "build:vercel": "node scripts/vercel-build.mjs",
-    "cloud:verify": "node --env-file-if-exists=.env scripts/run.mjs cloud-verify"
+    "cloud:verify": "node --env-file-if-exists=.env scripts/run.mjs cloud-verify",
+    "repository:verify": "node --env-file-if-exists=.env scripts/run.mjs repository-verify"
   },
   "dependencies": {
     "@base-ui/react": "1.7.0",

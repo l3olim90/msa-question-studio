@@ -117,7 +117,11 @@ try {
     /permanent/,
   );
   assert.equal(importAttempts, 1);
-  const first = await approveQuestion(fixture);
+  const approval = await approveRoute(request('/api/repository', { result: fixture, approved: true }));
+  assert.equal(approval.status, 200);
+  const first = await approval.json();
+  assert.equal(first.result, undefined, 'approval returns a small receipt; open loads the full question');
+  assert.deepEqual((await getQuestion(first.id)).result, fixture);
   assert.equal(first.revision, 1);
   fixture.draft.title = 'Refined water question';
   assert.notEqual(
@@ -148,6 +152,20 @@ try {
   assert.equal(restart.stdout.trim(), '2');
   assert.equal((await listQuestions('EM2')).length, 0);
   assert.equal((await listQuestions('EM1', 'refined')).length, 1);
+  assert.equal((await listQuestions('EM1'))[0].difficulty, fixture.effectiveBrief.difficulty);
+  // Failure in the final audit write must roll back both current and history.
+  database().exec(`CREATE TEMP TRIGGER fail_repository_event BEFORE INSERT ON repository_events
+    BEGIN SELECT RAISE(ABORT, 'Simulated audit failure'); END;`);
+  try {
+    await assert.rejects(() => approveQuestion(fixture), /Simulated audit failure/);
+    await assert.rejects(() => approveQuestion(fixture, first.id, 2), /Simulated audit failure/);
+  } finally {
+    database().exec('DROP TRIGGER fail_repository_event');
+  }
+  assert.equal((await getQuestion(first.id)).revision, 2);
+  assert.equal(database().prepare('SELECT count(*) AS n FROM repository_questions').get()!.n, 1);
+  assert.equal(database().prepare('SELECT count(*) AS n FROM repository_revisions').get()!.n, 2);
+  assert.equal(database().prepare('SELECT count(*) AS n FROM repository_events').get()!.n, 2);
   assert.equal(
     (
       await approveRoute(

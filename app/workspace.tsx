@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { generationRequest } from '@/lib/service-response';
 import { sourceQuestionsRequest, SOURCE_REQUEST_ATTEMPTS } from '@/lib/source-request';
 import { DesmosGraph, desmosPng } from './desmos-graph';
@@ -31,7 +31,7 @@ import { sourceRequest } from '@/lib/source-selection';
 import { APP_VERSION } from '@/lib/version';
 import { configurationIssues } from '@/lib/configuration';
 import { studioApi } from '@/lib/client-api';
-import type { RepositoryEntry } from '@/lib/repository';
+import type { RepositoryEntry, RepositorySummary } from '@/lib/repository';
 import { Library } from './library';
 import { Activity } from './activity';
 import { SourceImports } from './source-imports';
@@ -149,8 +149,9 @@ export default function Workspace({
   >({});
   const currentKey = history?.activeId + ':' + candidateIndex;
   const binding = bindings[currentKey];
+  const resultSnapshot = useMemo(() => JSON.stringify(result), [result]);
   const unchangedApproved =
-    !!binding && JSON.stringify(result) === binding.saved;
+    !!binding && resultSnapshot === binding.saved;
   function openRepository(entry: RepositoryEntry) {
     const batchId = crypto.randomUUID();
     setHistory((current) =>
@@ -186,7 +187,7 @@ export default function Workspace({
     setError('');
     setGenerationError(false);
     try {
-      const entry = await studioApi<RepositoryEntry>(
+      const entry = await studioApi<RepositorySummary>(
         '/api/repository',
         'POST',
         {
@@ -201,7 +202,7 @@ export default function Workspace({
         [currentKey]: {
           id: entry.id,
           revision: entry.revision,
-          saved: JSON.stringify(result),
+          saved: resultSnapshot,
         },
       }));
       setRepositoryRefresh((current) => current + 1);
