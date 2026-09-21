@@ -1,7 +1,9 @@
 import { z } from 'zod';
 import { storedBriefSchema, draftSchema, feasibilitySchema } from './schema';
 import { safeSourceUrl } from './source-url';
-const sourceUrl = z.string().refine(safeSourceUrl, 'Use an application-managed source image.');
+const sourceUrl = z
+  .string()
+  .refine(safeSourceUrl, 'Use an application-managed source image.');
 
 const referenceSchema = z.object({
   totalMarks: z.string().nullable(),
@@ -147,7 +149,7 @@ const historySchema = z
   .refine(
     (s) =>
       s.activeId === null
-        ? s.batches.length === 0
+        ? s.candidateIndex === 0
         : s.batches.some(
             (b) => b.id === s.activeId && b.results[s.candidateIndex],
           ),
@@ -203,4 +205,26 @@ export function selectQuestion(
   if (!state.batches.find((batch) => batch.id === id)?.results[index])
     return state;
   return { ...state, activeId: id, candidateIndex: index };
+}
+// Clearing the working preview does not remove any drafts from this visit.
+export function deselectQuestion(state: QuestionHistory): QuestionHistory {
+  return { ...state, activeId: null, candidateIndex: 0 };
+}
+export function draftSetup(result: Result) {
+  // Refinements can alter marks/difficulty. Keep the original creation settings
+  // and source choice when revisiting the question, including older snapshots.
+  const original = result.previousVersions[0]?.result ?? result;
+  const generationMode =
+    original.generationMode ?? (original.sourceQuestionId ? 'similar' : 'new');
+  const sourceQuestionId =
+    generationMode === 'similar' ? original.sourceQuestionId || '' : '';
+  return {
+    brief: original.brief,
+    generationMode,
+    variation: original.similarVariation ?? { numbers: false, context: false },
+    sourceQuestionId,
+    references: sourceQuestionId
+      ? original.references.filter((ref) => ref.id === sourceQuestionId)
+      : [],
+  };
 }

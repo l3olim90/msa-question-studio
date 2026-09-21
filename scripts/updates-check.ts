@@ -11,6 +11,9 @@ import {
   readHistory,
   updateQuestion,
   selectQuestion,
+  deselectQuestion,
+  draftSetup,
+  recordRefinement,
   resultSchema,
 } from '../lib/history';
 import { APP_VERSION } from '../lib/version';
@@ -193,6 +196,109 @@ assert.throws(() =>
   readHistory(JSON.stringify({ ...history, candidateIndex: 2 })),
 );
 assert.throws(() => readHistory(JSON.stringify({ ...history, version: 2 })));
+const latest = recordRefinement(
+  result,
+  updated,
+  'Revise the title and diagram.',
+);
+const refinedHistory = updateQuestion(history, latest);
+const cleared = deselectQuestion(refinedHistory);
+assert.equal(cleared.activeId, null);
+assert.equal(cleared.candidateIndex, 0);
+assert.equal(cleared.sessionId, refinedHistory.sessionId);
+assert.deepEqual(cleared.batches, refinedHistory.batches);
+assert.deepEqual(readHistory(JSON.stringify(cleared)), cleared);
+assert.deepEqual(deselectQuestion(cleared), cleared);
+assert.deepEqual(updateQuestion(cleared, result).batches, cleared.batches);
+const reopened = selectQuestion(cleared, firstId, 0);
+assert.equal(reopened.activeId, firstId);
+assert.deepEqual(reopened.batches[0].results[0], latest);
+const candidateId = cleared.batches[1].id;
+for (const index of [0, 1, 2]) {
+  const selected = selectQuestion(cleared, candidateId, index);
+  assert.equal(selected.candidateIndex, index);
+  assert.deepEqual(deselectQuestion(selected).batches, refinedHistory.batches);
+}
+const nextGeneration = addQuestions(cleared, [result]);
+assert.equal(nextGeneration.batches.length, cleared.batches.length + 1);
+assert.deepEqual(nextGeneration.batches.slice(0, -1), cleared.batches);
+assert.throws(() =>
+  readHistory(JSON.stringify({ ...cleared, candidateIndex: 1 })),
+);
+console.log(
+  'PASS: clearing the preview preserves refined/manual drafts and every candidate, supports reopening, and isolates the next generation.',
+);
+const originalSetup = resultSchema.parse({
+  ...result,
+  brief: {
+    ...result.brief,
+    module: 'EM2',
+    topic: 'EM2-1',
+    subtopics: ['EM2-1.1'],
+    totalMarks: 15,
+    difficulty: 'Challenging',
+    creativeContext: true,
+    multipleParts: true,
+    autoParts: true,
+    partCount: 3,
+    nonRoutine: true,
+    useFormulaSheet: true,
+    specifications: 'Use a water-tank context.',
+  },
+});
+assert.deepEqual(draftSetup(originalSetup).brief, originalSetup.brief);
+assert.equal(draftSetup(originalSetup).generationMode, 'new');
+assert.deepEqual(draftSetup(originalSetup).variation, {
+  numbers: false,
+  context: false,
+});
+const sourceRef = {
+  id: 'selected-source',
+  label: 'Original source',
+  question: 'Source question',
+  solution: 'Source solution',
+  alternatives: [],
+  difficulty: 'Basic',
+  totalMarks: '6',
+  parentMarks: null,
+  marking: null,
+  screenshots: [],
+  images: [],
+  match: 'Exact sub-topic',
+};
+const similarSetup = resultSchema.parse({
+  ...result,
+  generationMode: 'similar',
+  sourceQuestionId: sourceRef.id,
+  similarVariation: { numbers: true, context: false },
+  references: [sourceRef, { ...sourceRef, id: 'unrelated-source' }],
+});
+const refinedSimilar = recordRefinement(
+  similarSetup,
+  {
+    ...similarSetup,
+    brief: originalSetup.brief,
+    effectiveBrief: originalSetup.brief,
+    similarVariation: undefined,
+  },
+  'Make this question challenging and change its marks.',
+);
+assert.deepEqual(draftSetup(refinedSimilar).brief, similarSetup.brief);
+assert.equal(draftSetup(refinedSimilar).generationMode, 'similar');
+assert.equal(draftSetup(refinedSimilar).sourceQuestionId, sourceRef.id);
+assert.deepEqual(draftSetup(refinedSimilar).references, [sourceRef]);
+assert.deepEqual(draftSetup(refinedSimilar).variation, {
+  numbers: true,
+  context: false,
+});
+assert.equal(
+  draftSetup({ ...similarSetup, generationMode: undefined }).generationMode,
+  'similar',
+);
+assert.deepEqual(draftSetup(result).references, []);
+console.log(
+  'PASS: revisiting drafts restores original brief/options and similar-source preferences without changing refined results.',
+);
 const prompts = loadPrompts();
 assert.match(
   prompts.version,

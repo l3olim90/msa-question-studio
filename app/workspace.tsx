@@ -42,6 +42,8 @@ import {
   addQuestions,
   updateQuestion,
   selectQuestion,
+  deselectQuestion,
+  draftSetup,
   resultSchema,
   recordRefinement,
   restoreVersion,
@@ -153,7 +155,58 @@ export default function Workspace({
   const resultSnapshot = useMemo(() => JSON.stringify(result), [result]);
   const unchangedApproved =
     !!binding && resultSnapshot === binding.saved;
+  function clearSourceBrowser() {
+    sourceAbort.current?.abort();
+    sourceAbort.current = null;
+    setSourceLoad(null);
+    setRefs([]);
+    setSelectedSource('');
+    setSourceKey('');
+    setSourcePickerOpen(false);
+  }
+  function restoreDraftSetup(saved: Result) {
+    const setup = draftSetup(saved);
+    const original = setup.brief;
+    clearSourceBrowser();
+    setGenerationMode(setup.generationMode);
+    setModule(original.module);
+    setQuestionType(original.questionType);
+    setTopic(original.topic);
+    setSubs(original.subtopics);
+    setMarks(String(original.totalMarks));
+    setDifficulty(original.difficulty);
+    setSpec(original.specifications);
+    setCreative(original.creativeContext);
+    setMultiple(original.multipleParts);
+    setAutoParts(!!original.autoParts);
+    setPartCount(String(original.partCount));
+    setNonRoutine(original.nonRoutine);
+    setUseFormulaSheet(original.useFormulaSheet);
+    setVariation(setup.variation);
+    if (setup.sourceQuestionId && setup.references.length) {
+      setRefs(setup.references);
+      setSelectedSource(setup.sourceQuestionId);
+      setSourceKey(sourceRequest(original));
+    }
+  }
+  function resetWorkingDraft() {
+    // Generation, refinement and diagram edits already update this draft list.
+    setHistory((current) => current ? deselectQuestion(current) : current);
+    setCandidates([]);
+    setCandidateIndex(0);
+    setResult(null);
+    setSolution(0);
+    setDiagramIndex(0);
+    setShapeIndex(0);
+    setManual(false);
+    setEdit('');
+    setError('');
+    setGenerationError(false);
+    setApprovalMessage('');
+    clearSourceBrowser();
+  }
   function openRepository(entry: RepositoryEntry) {
+    restoreDraftSetup(entry.result);
     const batchId = crypto.randomUUID();
     setHistory((current) =>
       addQuestions(current || emptyHistory(), [entry.result], batchId),
@@ -236,6 +289,7 @@ export default function Workspace({
     setHistory(saved);
     const batch = saved.batches.find((b) => b.id === saved.activeId);
     if (batch) {
+      restoreDraftSetup(batch.results[saved.candidateIndex]);
       setCandidates(batch.results);
       setCandidateIndex(saved.candidateIndex);
       setResult(batch.results[saved.candidateIndex]);
@@ -247,6 +301,7 @@ export default function Workspace({
     if (busy || !history) return;
     const batch = history.batches.find((b) => b.id === id);
     if (!batch?.results[index]) return;
+    restoreDraftSetup(batch.results[index]);
     setHistory(selectQuestion(history, id, index));
     setCandidates(batch.results);
     setApprovalMessage('');
@@ -503,6 +558,7 @@ export default function Workspace({
   }
   function viewCandidate(index: number) {
     if (busy || !candidates[index]) return;
+    restoreDraftSetup(candidates[index]);
     setHistory((current) =>
       current?.activeId
         ? selectQuestion(current, current.activeId, index)
@@ -665,12 +721,15 @@ export default function Workspace({
           <Choice
             label="Generation mode"
             value={generationMode}
+            disabled={!!busy || !history}
             items={[
               { id: 'new', name: 'New question from the brief' },
               { id: 'similar', name: 'Similar question from a source' },
             ]}
             onChange={(v) => {
-              if (!busy) setGenerationMode(v as 'new' | 'similar');
+              if (busy || !history || v === generationMode) return;
+              resetWorkingDraft();
+              setGenerationMode(v as 'new' | 'similar');
             }}
           />
           <p className="hint">
@@ -684,6 +743,8 @@ export default function Workspace({
               value={module}
               items={modules}
               onChange={(v) => {
+                if (busy || !history || v === module) return;
+                resetWorkingDraft();
                 setModule(v);
                 const t = topics.find(
                   (t) => t.module === v && t.level === 'Topic',
@@ -704,7 +765,11 @@ export default function Workspace({
                 { id: 'MCQ', name: 'MCQ' },
                 { id: 'Structured', name: 'Structured' },
               ]}
-              onChange={(v) => setQuestionType(v as 'MCQ' | 'Structured')}
+              onChange={(v) => {
+                if (busy || !history || v === questionType) return;
+                resetWorkingDraft();
+                setQuestionType(v as 'MCQ' | 'Structured');
+              }}
             />
             {questionType === 'MCQ' && (
               <p className="hint">
@@ -1041,6 +1106,9 @@ export default function Workspace({
               Working drafts are temporary. Approve questions for the repository
               to keep them across visits. Refinements here do not change an
               approved entry until you approve its replacement.
+              {' '}Changing generation mode, module or question type clears the
+              preview and keeps your questions here to reopen. Reopening a draft
+              also restores its original generation settings in the left panel.
             </p>
             {!history?.batches.length && (
               <p>No questions generated in this session yet.</p>
