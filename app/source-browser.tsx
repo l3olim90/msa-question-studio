@@ -2,7 +2,6 @@
 /* oxlint-disable next/no-img-element -- Authenticated source crops and inline diagrams must use their original URLs. */
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import type { Ref } from '@/lib/history';
 import { Maths } from './maths';
@@ -17,10 +16,6 @@ export function SourceBrowser({
   loaded,
   error,
   progress,
-  variation,
-  onVariation,
-  onGenerate,
-  generateLabel,
 }: {
   references: Ref[];
   selected: string;
@@ -31,10 +26,6 @@ export function SourceBrowser({
   loaded: boolean;
   error: string;
   progress: string;
-  variation: { numbers: boolean; context: boolean };
-  onVariation: (v: { numbers: boolean; context: boolean }) => void;
-  onGenerate: () => void;
-  generateLabel: string;
 }) {
   const [search, setSearch] = useState('');
   const filtered = references.filter((ref) =>
@@ -49,7 +40,8 @@ export function SourceBrowser({
         <div>
           <h3>Choose a source question</h3>
           <p className="hint">
-            Preview a question, then generate a similar one from it.
+            Preview and select a question here. Set optional variations and
+            generate using the left panel.
           </p>
         </div>
         <Button
@@ -194,38 +186,6 @@ export function SourceBrowser({
               )}
             </article>
           </div>
-          {chosen && (
-            <fieldset className="source-selection-actions" disabled={disabled}>
-              <legend>Optional variation preferences</legend>
-              <div className="source-variation-options">
-                <label className="subtopic-option" htmlFor="variation-numbers">
-                  <Checkbox
-                    id="variation-numbers"
-                    checked={variation.numbers}
-                    onCheckedChange={(numbers) =>
-                      onVariation({ ...variation, numbers })
-                    }
-                  />
-                  Change numbers / formulas
-                </label>
-                <label className="subtopic-option" htmlFor="variation-context">
-                  <Checkbox
-                    id="variation-context"
-                    checked={variation.context}
-                    onCheckedChange={(context) =>
-                      onVariation({ ...variation, context })
-                    }
-                  />
-                  Change context
-                </label>
-              </div>
-              <p className="hint">
-                Leave both unchecked to let AI choose. The source&apos;s main
-                mathematical method is retained.
-              </p>
-              <Button onClick={onGenerate}>{generateLabel}</Button>
-            </fieldset>
-          )}
         </>
       )}
     </div>

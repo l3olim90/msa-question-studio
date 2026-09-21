@@ -134,7 +134,6 @@ export default function Workspace({
   const [sourceLoad, setSourceLoad] = useState<{ key: string; loading: boolean; progress: string; error: string } | null>(null);
   const sourceAbort = useRef<AbortController | null>(null);
   const sourcePanel = useRef<HTMLElement | null>(null);
-  const draftPanel = useRef<HTMLElement | null>(null);
   const [selectedSource, setSelectedSource] = useState('');
   const [sourceKey, setSourceKey] = useState('');
   const [variation, setVariation] = useState({
@@ -932,14 +931,41 @@ export default function Workspace({
               </p>
             )}
             {generationMode === 'similar' && (
-              <div className="source-browse-launcher">
-                <Button variant="outline" disabled={!!configIssues.length || referencesLoading} onClick={browseSources} aria-controls="source-references">
-                  {referencesLoading ? 'Loading sources...' : 'Browse source questions'}
-                </Button>
-                <p className="hint">Browse, preview and select in Source references in the main window.</p>
-                {selectedReference && <p className="source-selected-summary"><strong>Selected:</strong> {selectedReference.label}</p>}
-                {(referencesLoading || selectedReference || referenceError) && <Button variant="link" onClick={focusSources} aria-controls="source-references">View source references</Button>}
-              </div>
+              <>
+                <div className="source-browse-launcher">
+                  <Button variant="outline" disabled={!!configIssues.length || referencesLoading} onClick={browseSources} aria-controls="source-references">
+                    {referencesLoading ? 'Loading sources...' : 'Browse source questions'}
+                  </Button>
+                  <p className="hint">Browse, preview and select in Source references in the main window.</p>
+                  {selectedReference && <p className="source-selected-summary"><strong>Selected:</strong> {selectedReference.label}</p>}
+                  {(referencesLoading || selectedReference || referenceError) && <Button variant="link" onClick={focusSources} aria-controls="source-references">View source references</Button>}
+                </div>
+                <fieldset className="source-variation-preferences">
+                  <legend>Optional variation preferences</legend>
+                  <div className="source-variation-options">
+                    <label className="subtopic-option" htmlFor="variation-numbers">
+                      <Checkbox
+                        id="variation-numbers"
+                        checked={variation.numbers}
+                        onCheckedChange={(numbers) => setVariation({ ...variation, numbers })}
+                      />
+                      Change numbers / formulas
+                    </label>
+                    <label className="subtopic-option" htmlFor="variation-context">
+                      <Checkbox
+                        id="variation-context"
+                        checked={variation.context}
+                        onCheckedChange={(context) => setVariation({ ...variation, context })}
+                      />
+                      Change context
+                    </label>
+                  </div>
+                  <p className="hint">
+                    Leave both unchecked to let AI choose. The source&apos;s main
+                    mathematical method is retained.
+                  </p>
+                </fieldset>
+              </>
             )}
             {configIssues.length > 0 && (
               <div className="error" role="alert">
@@ -991,7 +1017,7 @@ export default function Workspace({
             displayed question.
           </p>
         </aside>
-        <section className="desk" ref={draftPanel} tabIndex={-1}>
+        <section className="desk">
           <details className="question-history">
             <summary>
               Drafts this visit ·{' '}
@@ -1556,10 +1582,6 @@ export default function Workspace({
               loaded={sourceKey === browseKey}
               error={referenceError}
               progress={sourceProgress}
-              variation={variation}
-              onVariation={setVariation}
-              onGenerate={() => { draftPanel.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); void generate(); }}
-              generateLabel={brief.questionType === 'MCQ' ? 'Generate 3 similar MCQs' : 'Generate similar question'}
             />}
             {result && <h3>References used by the current draft ({shownRefs.length})</h3>}
             {!result && generationMode === 'new' && (

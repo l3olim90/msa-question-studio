@@ -46,7 +46,7 @@ pnpm start
 
 Restart after editing `.env`. Committed bank changes apply to the next reference retrieval; reload the page after adding modules or taxonomy entries. Installation/build, provider generation and Desmos require internet access to their respective services.
 
-For new questions, source retrieval starts only after Generate is clicked. Configuration changes and typing do not trigger source searches. In similar mode, Browse source questions scrolls to the main Source references section. Use the searchable list and larger preview there to select a source and generate. Temporary failures retry automatically up to three attempts, each with a 20-second timeout; changing filters cancels pending browsing. Sources depend only on module, question type, topic and difficulty. Cloud source-bank reads use one database round trip and a one-minute cache.
+For new questions, source retrieval starts only after Generate is clicked. Configuration changes and typing do not trigger source searches. In similar mode, Browse source questions scrolls to the main Source references section. Use the searchable list and larger preview there to select a source. Optional variation preferences and the single Generate similar question button are in the left panel. Temporary failures retry automatically up to three attempts, each with a 20-second timeout; changing filters cancels pending browsing. Sources depend only on module, question type, topic and difficulty. Cloud source-bank reads use one database round trip and a one-minute cache.
 
 ## Configure a provider
 
