@@ -136,6 +136,7 @@ export default function Workspace({
   const sourcePanel = useRef<HTMLElement | null>(null);
   const [selectedSource, setSelectedSource] = useState('');
   const [sourceKey, setSourceKey] = useState('');
+  const [sourcePickerOpen, setSourcePickerOpen] = useState(false);
   const [variation, setVariation] = useState({
     numbers: false,
     context: false,
@@ -168,6 +169,7 @@ export default function Workspace({
     setCandidates([entry.result]);
     setCandidateIndex(0);
     setResult(entry.result);
+    setSourcePickerOpen(false);
     setSolution(0);
     setDiagramIndex(0);
     setShapeIndex(0);
@@ -237,6 +239,7 @@ export default function Workspace({
       setCandidates(batch.results);
       setCandidateIndex(saved.candidateIndex);
       setResult(batch.results[saved.candidateIndex]);
+      setSourcePickerOpen(false);
       setManual(!!batch.results[saved.candidateIndex].manual);
     }
   }, []);
@@ -249,6 +252,7 @@ export default function Workspace({
     setApprovalMessage('');
     setCandidateIndex(index);
     setResult(batch.results[index]);
+    setSourcePickerOpen(false);
     setManual(!!batch.results[index].manual);
     setSolution(0);
     setDiagramIndex(0);
@@ -324,6 +328,7 @@ export default function Workspace({
   }
   async function browseSources() {
     if (configIssues.length || referencesLoading || busy) return;
+    setSourcePickerOpen(true);
     sourceAbort.current?.abort();
     const controller = new AbortController();
     sourceAbort.current = controller;
@@ -460,6 +465,7 @@ export default function Workspace({
           setResult(generated[0]);
         }
         setSolution(0);
+        setSourcePickerOpen(false);
         setManual(false);
         setDiagramIndex(0);
         setShapeIndex(0);
@@ -479,6 +485,7 @@ export default function Workspace({
     if (!result || busy) return;
     const restored = restoreVersion(result, index);
     setResult(restored);
+    setSourcePickerOpen(false);
     setHistory((current) =>
       current ? updateQuestion(current, restored) : current,
     );
@@ -504,6 +511,7 @@ export default function Workspace({
     setApprovalMessage('');
     setCandidateIndex(index);
     setResult(candidates[index]);
+    setSourcePickerOpen(false);
     setSolution(0);
     setDiagramIndex(0);
     setShapeIndex(0);
@@ -577,7 +585,9 @@ export default function Workspace({
 
   const d = result?.draft,
     sol = d?.solutions[solution],
-    shownRefs = result?.references || [],
+    shownRefs = result?.generationMode === 'similar'
+      ? result.references.filter(ref => ref.id === result.sourceQuestionId)
+      : result?.references || [],
     diagram = d?.diagrams[diagramIndex],
     shape = diagram?.shapes[shapeIndex];
   return (
@@ -1572,7 +1582,7 @@ export default function Workspace({
             <div className="eyebrow">
               SOURCE REFERENCES
             </div>
-            {generationMode === 'similar' && <SourceBrowser
+            {generationMode === 'similar' && (!result || sourcePickerOpen) && <SourceBrowser
               key={browseKey}
               references={sourceKey === browseKey ? refs : []}
               selected={selectedReference?.id || ''}
@@ -1590,7 +1600,9 @@ export default function Workspace({
                 Sources are retrieved when you click Generate new question.
               </p>
             )}
-            {result && <p className="hint">
+            {result?.generationMode === 'similar' ? <p className="hint">
+              This draft is based on the selected source question below. Use Browse source questions to choose a source for another question.
+            </p> : result && <p className="hint">
               {result.exactExamples} exact sub-topic matches.
               Related examples stay within the selected topic. Source totals
               without step allocations are not treated as detailed marking

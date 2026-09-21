@@ -1,5 +1,6 @@
-import postgres from 'postgres';
+import postgres, { type TransactionSql } from 'postgres';
 import { createClient } from '@supabase/supabase-js';
+import { databaseExecutor } from './database-connection';
 
 export function cloudEnabled() {
   const mode =
@@ -11,48 +12,50 @@ export function cloudEnabled() {
   return mode === 'supabase';
 }
 let connection: ReturnType<typeof postgres> | undefined;
+let executor: ReturnType<typeof databaseExecutor> | undefined;
 export function postgresConnection() {
   if (!process.env.DATABASE_URL)
     throw new Error('Set the server DATABASE_URL before using Supabase.');
   if (connection) return connection;
-  const raw = postgres(process.env.DATABASE_URL, {
-    ssl: 'require',
+  const options = {
+    ssl: 'require' as const,
     prepare: false,
     max: 1,
-    connect_timeout: 15,
+    // Supported by postgres.js; omitted from its public Options type.
+    max_pipeline: 1,
+    connect_timeout: 5,
     idle_timeout: 20,
     max_lifetime: 60 * 20,
     onnotice: () => {},
-  });
-  // Reserve the connection for each independent operation. This prevents
-  // transaction pipelining through Supavisor while allowing callers to run
-  // concurrently. Native begin() reserves it for the whole transaction.
+  };
+  const create = () => postgres(process.env.DATABASE_URL!, options);
+  const pool = (executor = databaseExecutor(create, {
+    queueMs: process.env.VERCEL ? 5000 : 120000,
+    preflightMs: 6000,
+    idleMs: 15000,
+    queryMs: 20000,
+  }));
+  // Helpers such as sql.json create parameters without opening a connection.
+  const helpers = create();
   const query = async (
     strings: TemplateStringsArray,
     ...values: postgres.ParameterOrFragment<never>[]
   ) => {
-    const reserved = await raw.reserve();
-    try {
-      return await reserved(strings, ...values);
-    } finally {
-      reserved.release();
-    }
+    return pool.run((sql) => sql(strings, ...values));
   };
-  connection = Object.assign(query, raw, {
-    unsafe: async (...args: Parameters<typeof raw.unsafe>) => {
-      const reserved = await raw.reserve();
-      try {
-        return await reserved.unsafe(...args);
-      } finally {
-        reserved.release();
-      }
-    },
-  }) as unknown as typeof raw;
+  connection = Object.assign(query, helpers, {
+    unsafe: (...args: Parameters<typeof helpers.unsafe>) =>
+      pool.run((sql) => sql.unsafe(...args)),
+    begin: (work: (sql: TransactionSql) => Promise<unknown>) =>
+      pool.run((sql) => sql.begin(work), process.env.VERCEL ? 20000 : 120000),
+    end: () => pool.close(),
+  }) as unknown as ReturnType<typeof postgres>;
   return connection;
 }
 export async function closeCloud() {
-  await connection?.end({ timeout: 5 });
+  await executor?.close();
   connection = undefined;
+  executor = undefined;
 }
 export function supabaseAdmin() {
   const url = process.env.SUPABASE_URL,

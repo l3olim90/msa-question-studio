@@ -26,6 +26,7 @@ import { listTerminology, terminologyIssues } from './terminology';
 import { formulasForBrief } from './formula-catalog';
 import { verifyFormulaSource } from './formula-source';
 import { assertProfessionalContent } from './content-safety';
+import { HttpError } from './security';
 // Hidden new-question controls must not constrain similar or MCQ authoring.
 function authoringBrief(
   brief: ReturnType<typeof retrieve>['brief'],
@@ -88,11 +89,9 @@ async function generateInBank(
     mode === 'similar' ? similarBrief(raw, !!previous, base) : raw,
     mode === 'similar',
   );
-  if (
-    base &&
-    !requested.examples.some((q) => q.question_id === base.question_id)
-  )
-    requested.examples = [base, ...requested.examples].slice(0, 6);
+  if (mode === 'similar' && !base)
+    throw new HttpError(422, 'The original source question is unavailable. Browse sources and choose an active source for a new similar question.');
+  if (base) requested.examples = [base];
   const terminologyRules = await listTerminology(requested.brief.module);
   assertProfessionalContent({ specifications: requested.brief.specifications, edit, previous }, 'Request');
   assertProfessionalContent(terminologyRules, 'Saved terminology');
@@ -285,9 +284,9 @@ async function generateInBank(
   generationContext.available_formula_sheet = ctx.brief.useFormulaSheet
     ? formulasForBrief(ctx.brief)
     : null;
-  // Planning can narrow coverage; preserve the originally selected base and its diagrams.
-  if (base && !ctx.examples.some((q) => q.question_id === base.question_id))
-    ctx.examples = [base, ...ctx.examples].slice(0, 6);
+  // Similar generation and refinement use only the selected source, including
+  // its diagrams. The full syllabus context still constrains validity.
+  if (base) ctx.examples = [base];
   refs = references(ctx);
   input = [
     {
@@ -676,7 +675,7 @@ async function generateInBank(
     feasibility,
     calculations: currentCalculations,
     calculationHistory: calcLog,
-    exactExamples: ctx.exactCount,
+    exactExamples: refs.filter(ref => ref.match === 'Exact sub-topic').length,
     provider: connection.provider,
     model: modelFor(connection),
     reasoning: 'high',

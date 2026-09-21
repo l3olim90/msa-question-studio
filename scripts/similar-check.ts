@@ -190,6 +190,8 @@ try {
   const received: {
     base_reference: { id: string };
     source_marks: number | null;
+    references?: { id: string }[];
+    reference_examples?: { id: string }[];
   }[] = [];
   globalThis.fetch = async (_url, init) => {
     const body = JSON.parse(init!.body as string);
@@ -266,6 +268,14 @@ try {
   );
   assert.equal(first.draft.total_marks, 4);
   assert.equal(first.effectiveBrief.difficulty, 'Basic');
+  assert.deepEqual(first.references.map(ref => ref.id), [base.question_id]);
+  assert.equal(first.exactExamples, 1);
+  await assert.rejects(() => generate('fixture', first.effectiveBrief, first.draft, 'Clarify the wording.', {}, undefined, { sourceQuestionId: 'missing-source' }), { status: 422 });
+  for (const input of received) {
+    for (const key of ['references', 'reference_examples'] as const) {
+      if (input[key]) assert.deepEqual(input[key].map((ref: {id:string}) => ref.id), [base.question_id]);
+    }
+  }
   assert(
     received.every(
       (input) =>
@@ -287,6 +297,7 @@ try {
   );
   assert.equal(revised.effectiveBrief.totalMarks, 8);
   assert.equal(revised.effectiveBrief.difficulty, 'Challenging');
+  assert.deepEqual(revised.references.map(ref => ref.id), [base.question_id]);
   assert.equal(
     refinementSource(revised.effectiveBrief, base.question_id)?.question_id,
     base.question_id,
@@ -334,6 +345,7 @@ try {
         candidate.sourceQuestionId === basicMcqs[0].question_id,
     ),
   );
+  assert(mcqCandidates.candidates.every(candidate => candidate.references.length === 1 && candidate.references[0].id === basicMcqs[0].question_id));
   const unmarkedFilter = { ...filter, topic: 'EM1-3' };
   const unmarked = sourceQuestions(unmarkedFilter).find(
     (q) => !q.question_marks,
