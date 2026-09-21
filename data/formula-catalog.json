@@ -1,0 +1,484 @@
+{
+  "version": "2026-09-21",
+  "source": {
+    "file": "MSA Formula Sheet.pdf",
+    "title": "MSA Mathematical Formulae & Tables",
+    "sha256": "2e258af0be92bff89e182f1f46e08369c8f49d683fed756b92949199c821bc81",
+    "pages": 4
+  },
+  "modules": {
+    "EM1": {
+      "entries": [
+        {
+          "id": "MSA-CART",
+          "name": "Cartesian form and conjugate",
+          "page": 1,
+          "latex": "z=a+jb,\\quad j^2=-1,\\quad \\overline z=a-jb,\\quad z\\overline z=a^2+b^2",
+          "syllabusIds": ["EM1-2.2"],
+          "prerequisiteFor": ["EM1-2.3", "EM1-2.4", "EM1-2.5"],
+          "conditions": "",
+          "evidence": {
+            "file": "EM1 Notes - ver17Mar26.pdf",
+            "section": "EM1-2.2 Complex Numbers in Cartesian (Rectangular) Form",
+            "page": "35"
+          }
+        },
+        {
+          "id": "MSA-POLAR",
+          "name": "Polar and trigonometric forms",
+          "page": 1,
+          "latex": "z=r(\\cos\\theta+j\\sin\\theta)=r\\angle\\theta,\\quad r=|z|=\\sqrt{a^2+b^2},\\quad \\tan\\theta=\\frac{b}{a}",
+          "syllabusIds": ["EM1-2.3"],
+          "prerequisiteFor": ["EM1-2.4", "EM1-2.5"],
+          "conditions": "Choose the correct quadrant; principal argument is in (-pi,pi]. Argument undefined for z=0; handle a=0 separately.",
+          "evidence": {
+            "file": "EM1 Notes - ver17Mar26.pdf",
+            "section": "EM1-2.3 The Polar Form of a Complex Number",
+            "page": "42"
+          }
+        },
+        {
+          "id": "MSA-POLAR-OPS",
+          "name": "Polar multiplication and division",
+          "page": 1,
+          "latex": "z_1z_2=r_1r_2\\angle(\\theta_1+\\theta_2),\\quad \\frac{z_1}{z_2}=\\frac{r_1}{r_2}\\angle(\\theta_1-\\theta_2)",
+          "syllabusIds": ["EM1-2.3"],
+          "prerequisiteFor": ["EM1-2.4", "EM1-2.5"],
+          "conditions": "Division requires z_2 nonzero. Reduce final arguments to the principal interval.",
+          "evidence": {
+            "file": "EM1 Notes - ver17Mar26.pdf",
+            "section": "EM1-2.3 The Polar Form of a Complex Number",
+            "page": "42"
+          }
+        },
+        {
+          "id": "MSA-EULER",
+          "name": "Exponential form and Euler formula",
+          "page": 1,
+          "latex": "z=re^{j\\theta},\\quad e^{j\\theta}=\\cos\\theta+j\\sin\\theta",
+          "syllabusIds": ["EM1-2.4"],
+          "prerequisiteFor": ["EM1-2.5"],
+          "conditions": "Angles in the exponent are in radians.",
+          "evidence": {
+            "file": "EM1 Notes - ver17Mar26.pdf",
+            "section": "EM1-2.4 The Exponential Form of a Complex Number",
+            "page": "48"
+          }
+        },
+        {
+          "id": "MSA-DEMOIVRE",
+          "name": "De Moivre theorem",
+          "page": 1,
+          "latex": "(r\\angle\\theta)^n=r^n\\angle n\\theta=r^n(\\cos n\\theta+j\\sin n\\theta)",
+          "syllabusIds": ["EM1-2.5"],
+          "prerequisiteFor": [],
+          "conditions": "EM1 permits integer powers only; fractional powers/root enumeration are excluded by the notes.",
+          "evidence": {
+            "file": "EM1 Notes - ver17Mar26.pdf",
+            "section": "EM1-2.5 De Moivre's Theorem",
+            "page": "50"
+          }
+        },
+        {
+          "id": "MSA-DET2",
+          "name": "Determinant of order 2",
+          "page": 3,
+          "latex": "\\begin{vmatrix}a_{11}&a_{12}\\\\a_{21}&a_{22}\\end{vmatrix}=a_{11}a_{22}-a_{12}a_{21}",
+          "syllabusIds": ["EM1-1.5"],
+          "prerequisiteFor": ["EM1-1.6", "EM1-1.7"],
+          "conditions": "",
+          "evidence": {
+            "file": "EM1 Notes - ver17Mar26.pdf",
+            "section": "EM1-1.5 Determinant of a Square Matrix",
+            "page": "14"
+          }
+        },
+        {
+          "id": "MSA-DET3",
+          "name": "Determinant of order 3",
+          "page": 3,
+          "latex": "|A|=a_{11}A_{11}+a_{12}A_{12}+a_{13}A_{13},\\quad A_{11}=a_{22}a_{33}-a_{23}a_{32},\\quad A_{12}=-(a_{21}a_{33}-a_{23}a_{31}),\\quad A_{13}=a_{21}a_{32}-a_{22}a_{31}",
+          "syllabusIds": ["EM1-1.5"],
+          "prerequisiteFor": ["EM1-1.7"],
+          "conditions": "A_ij denotes a cofactor, not an element.",
+          "evidence": {
+            "file": "EM1 Notes - ver17Mar26.pdf",
+            "section": "EM1-1.5 Determinant of a Square Matrix",
+            "page": "14"
+          }
+        },
+        {
+          "id": "MSA-CRAMER",
+          "name": "Cramer rule for three equations",
+          "page": 3,
+          "latex": "x_1=\\frac{|A_1|}{|A|},\\quad x_2=\\frac{|A_2|}{|A|},\\quad x_3=\\frac{|A_3|}{|A|}",
+          "syllabusIds": ["EM1-1.7"],
+          "prerequisiteFor": [],
+          "conditions": "A is the coefficient matrix and A_i replaces column i with the right-hand-side constants. |A| must be nonzero. Compact notation for the three expanded determinants printed on page 3.",
+          "evidence": {
+            "file": "EM1 Notes - ver17Mar26.pdf",
+            "section": "EM1-1.7 Solution of system of equations",
+            "page": "19"
+          }
+        },
+        {
+          "id": "MSA-D-POWER",
+          "name": "Power function derivative",
+          "page": 2,
+          "latex": "\\frac{d}{dx}x^n=nx^{n-1}",
+          "syllabusIds": ["EM1-3.4"],
+          "prerequisiteFor": [
+            "EM1-4.2",
+            "EM1-4.3",
+            "EM1-5.2",
+            "EM1-5.3",
+            "EM1-5.4",
+            "EM1-5.5",
+            "EM1-5.6"
+          ],
+          "conditions": "On the real domain where the function is differentiable.",
+          "evidence": {
+            "file": "EM1 Notes - ver17Mar26.pdf",
+            "section": "EM1-3.4 Derivative of the Power Function",
+            "page": "62"
+          }
+        },
+        {
+          "id": "MSA-D-LOG",
+          "name": "Natural logarithm derivative",
+          "page": 2,
+          "latex": "\\frac{d}{dx}\\ln x=\\frac1x",
+          "syllabusIds": ["EM1-3.10"],
+          "prerequisiteFor": [
+            "EM1-4.2",
+            "EM1-4.3",
+            "EM1-5.2",
+            "EM1-5.3",
+            "EM1-5.4",
+            "EM1-5.5",
+            "EM1-5.6"
+          ],
+          "conditions": "x>0.",
+          "evidence": {
+            "file": "EM1 Notes - ver17Mar26.pdf",
+            "section": "EM1-3.10 Derivatives of Logarithmic Functions",
+            "page": "68"
+          }
+        },
+        {
+          "id": "MSA-D-EXP",
+          "name": "Exponential functions derivative",
+          "page": 2,
+          "latex": "\\frac{d}{dx}a^x=a^x\\ln a,\\quad \\frac{d}{dx}e^x=e^x",
+          "syllabusIds": ["EM1-3.11"],
+          "prerequisiteFor": [
+            "EM1-4.2",
+            "EM1-4.3",
+            "EM1-5.2",
+            "EM1-5.3",
+            "EM1-5.4",
+            "EM1-5.5",
+            "EM1-5.6"
+          ],
+          "conditions": "a>0.",
+          "evidence": {
+            "file": "EM1 Notes - ver17Mar26.pdf",
+            "section": "EM1-3.11 Derivatives of Exponential Functions",
+            "page": "70"
+          }
+        },
+        {
+          "id": "MSA-D-TRIG",
+          "name": "Trigonometric functions derivative",
+          "page": 2,
+          "latex": "\\frac{d}{dx}\\sin x=\\cos x,\\quad \\frac{d}{dx}\\cos x=-\\sin x,\\quad \\frac{d}{dx}\\tan x=\\sec^2 x,\\quad \\frac{d}{dx}\\cot x=-\\csc^2 x,\\quad \\frac{d}{dx}\\sec x=\\sec x\\tan x,\\quad \\frac{d}{dx}\\csc x=-\\csc x\\cot x",
+          "syllabusIds": ["EM1-3.6"],
+          "prerequisiteFor": [
+            "EM1-4.2",
+            "EM1-4.3",
+            "EM1-5.2",
+            "EM1-5.3",
+            "EM1-5.4",
+            "EM1-5.5",
+            "EM1-5.6"
+          ],
+          "conditions": "Angles in radians; use only where functions are defined.",
+          "evidence": {
+            "file": "EM1 Notes - ver17Mar26.pdf",
+            "section": "EM1-3.6 Derivatives of Trigonometric Functions",
+            "page": "64"
+          }
+        },
+        {
+          "id": "MSA-D-INVTRIG",
+          "name": "Inverse trigonometric functions derivative",
+          "page": 2,
+          "latex": "\\frac{d}{dx}\\sin^{-1}x=\\frac1{\\sqrt{1-x^2}},\\quad \\frac{d}{dx}\\cos^{-1}x=-\\frac1{\\sqrt{1-x^2}},\\quad \\frac{d}{dx}\\tan^{-1}x=\\frac1{1+x^2}",
+          "syllabusIds": ["EM1-3.12"],
+          "prerequisiteFor": [
+            "EM1-4.2",
+            "EM1-4.3",
+            "EM1-5.2",
+            "EM1-5.3",
+            "EM1-5.4",
+            "EM1-5.5",
+            "EM1-5.6"
+          ],
+          "conditions": "Inverse sine/cosine derivatives require -1<x<1; angles in radians.",
+          "evidence": {
+            "file": "EM1 Notes - ver17Mar26.pdf",
+            "section": "EM1-3.12 Derivatives of Inverse Trigonometric Functions",
+            "page": "71"
+          }
+        },
+        {
+          "id": "MSA-D-LINEAR",
+          "name": "Constant multiple and sum rules",
+          "page": 2,
+          "latex": "\\frac{d}{dx}(ku)=k\\frac{du}{dx},\\quad \\frac{d}{dx}(u+v)=\\frac{du}{dx}+\\frac{dv}{dx}",
+          "syllabusIds": ["EM1-3.5"],
+          "prerequisiteFor": [
+            "EM1-4.2",
+            "EM1-4.3",
+            "EM1-5.2",
+            "EM1-5.3",
+            "EM1-5.4",
+            "EM1-5.5",
+            "EM1-5.6"
+          ],
+          "conditions": "k constant; u,v differentiable.",
+          "evidence": {
+            "file": "EM1 Notes - ver17Mar26.pdf",
+            "section": "EM1-3.5 Linearity Rule",
+            "page": "63"
+          }
+        },
+        {
+          "id": "MSA-D-PRODUCT",
+          "name": "Product rule",
+          "page": 2,
+          "latex": "\\frac{d}{dx}(uv)=u\\frac{dv}{dx}+v\\frac{du}{dx}",
+          "syllabusIds": ["EM1-3.7"],
+          "prerequisiteFor": [
+            "EM1-4.2",
+            "EM1-4.3",
+            "EM1-5.2",
+            "EM1-5.3",
+            "EM1-5.4",
+            "EM1-5.5",
+            "EM1-5.6"
+          ],
+          "conditions": "u,v differentiable.",
+          "evidence": {
+            "file": "EM1 Notes - ver17Mar26.pdf",
+            "section": "EM1-3.7 Product Rule",
+            "page": "65"
+          }
+        },
+        {
+          "id": "MSA-D-QUOTIENT",
+          "name": "Quotient rule",
+          "page": 2,
+          "latex": "\\frac{d}{dx}\\left(\\frac uv\\right)=\\frac{v\\frac{du}{dx}-u\\frac{dv}{dx}}{v^2}",
+          "syllabusIds": ["EM1-3.8"],
+          "prerequisiteFor": [
+            "EM1-4.2",
+            "EM1-4.3",
+            "EM1-5.2",
+            "EM1-5.3",
+            "EM1-5.4",
+            "EM1-5.5",
+            "EM1-5.6"
+          ],
+          "conditions": "v nonzero; u,v differentiable.",
+          "evidence": {
+            "file": "EM1 Notes - ver17Mar26.pdf",
+            "section": "EM1-3.8 Quotient Rule",
+            "page": "66"
+          }
+        },
+        {
+          "id": "MSA-D-CHAIN",
+          "name": "Chain rule",
+          "page": 2,
+          "latex": "\\frac{dy}{dx}=\\frac{dy}{du}\\frac{du}{dx}",
+          "syllabusIds": ["EM1-3.9"],
+          "prerequisiteFor": [
+            "EM1-4.2",
+            "EM1-4.3",
+            "EM1-5.2",
+            "EM1-5.3",
+            "EM1-5.4",
+            "EM1-5.5",
+            "EM1-5.6"
+          ],
+          "conditions": "Functions differentiable at the required points.",
+          "evidence": {
+            "file": "EM1 Notes - ver17Mar26.pdf",
+            "section": "EM1-3.9 Chain Rule",
+            "page": "66"
+          }
+        },
+        {
+          "id": "MSA-I-POWER",
+          "name": "Power integral",
+          "page": 2,
+          "latex": "\\int x^n\\,dx=\\frac{x^{n+1}}{n+1}+C",
+          "syllabusIds": ["EM1-6.3"],
+          "prerequisiteFor": [
+            "EM1-6.8",
+            "EM1-6.9",
+            "EM1-7.3",
+            "EM1-7.4",
+            "EM1-7.5"
+          ],
+          "conditions": "n is not -1; work on the real domain.",
+          "evidence": {
+            "file": "EM1 Notes - ver17Mar26.pdf",
+            "section": "EM1-6.3 Integration of Power Functions",
+            "page": "112"
+          }
+        },
+        {
+          "id": "MSA-I-LOG",
+          "name": "Reciprocal integral",
+          "page": 2,
+          "latex": "\\int\\frac1x\\,dx=\\ln|x|+C",
+          "syllabusIds": ["EM1-6.3"],
+          "prerequisiteFor": [
+            "EM1-6.8",
+            "EM1-6.9",
+            "EM1-7.3",
+            "EM1-7.4",
+            "EM1-7.5"
+          ],
+          "conditions": "x nonzero; no interval may cross zero.",
+          "evidence": {
+            "file": "EM1 Notes - ver17Mar26.pdf",
+            "section": "EM1-6.3 Integration of Power Functions",
+            "page": "112"
+          }
+        },
+        {
+          "id": "MSA-I-TRIG",
+          "name": "Standard trigonometric integrals",
+          "page": 2,
+          "latex": "\\int\\sin x\\,dx=-\\cos x+C,\\quad \\int\\cos x\\,dx=\\sin x+C,\\quad \\int\\sec^2x\\,dx=\\tan x+C,\\quad \\int\\csc^2x\\,dx=-\\cot x+C,\\quad \\int\\sec x\\tan x\\,dx=\\sec x+C,\\quad \\int\\csc x\\cot x\\,dx=-\\csc x+C",
+          "syllabusIds": ["EM1-6.5"],
+          "prerequisiteFor": [
+            "EM1-6.8",
+            "EM1-6.9",
+            "EM1-7.3",
+            "EM1-7.4",
+            "EM1-7.5"
+          ],
+          "conditions": "Angles in radians; avoid singularities. Other trigonometric integrals on the sheet are not part of this mapped EM1 subset.",
+          "evidence": {
+            "file": "EM1 Notes - ver17Mar26.pdf",
+            "section": "EM1-6.5 Integration of Trigonometric Functions",
+            "page": "113"
+          }
+        },
+        {
+          "id": "MSA-I-EXP",
+          "name": "Exponential integrals",
+          "page": 2,
+          "latex": "\\int a^x\\,dx=\\frac{a^x}{\\ln a}+C,\\quad \\int e^x\\,dx=e^x+C",
+          "syllabusIds": ["EM1-6.6"],
+          "prerequisiteFor": [
+            "EM1-6.8",
+            "EM1-6.9",
+            "EM1-7.3",
+            "EM1-7.4",
+            "EM1-7.5"
+          ],
+          "conditions": "a>0 and a not 1 in the first formula.",
+          "evidence": {
+            "file": "EM1 Notes - ver17Mar26.pdf",
+            "section": "EM1-6.6 Integration of Exponential Functions",
+            "page": "115"
+          }
+        },
+        {
+          "id": "MSA-I-ARCTAN",
+          "name": "Integral leading to inverse tangent",
+          "page": 2,
+          "latex": "\\int\\frac1{x^2+a^2}\\,dx=\\frac1a\\tan^{-1}\\left(\\frac xa\\right)+C",
+          "syllabusIds": ["EM1-6.7"],
+          "prerequisiteFor": [
+            "EM1-6.8",
+            "EM1-6.9",
+            "EM1-7.3",
+            "EM1-7.4",
+            "EM1-7.5"
+          ],
+          "conditions": "Use a>0; inverse tangent in radians.",
+          "evidence": {
+            "file": "EM1 Notes - ver17Mar26.pdf",
+            "section": "EM1-6.7 Integration Leading to Inverse Trigonometric Functions",
+            "page": "116"
+          }
+        },
+        {
+          "id": "MSA-I-ARCSIN",
+          "name": "Integral leading to inverse sine",
+          "page": 2,
+          "latex": "\\int\\frac1{\\sqrt{a^2-x^2}}\\,dx=\\sin^{-1}\\left(\\frac xa\\right)+C",
+          "syllabusIds": ["EM1-6.7"],
+          "prerequisiteFor": [
+            "EM1-6.8",
+            "EM1-6.9",
+            "EM1-7.3",
+            "EM1-7.4",
+            "EM1-7.5"
+          ],
+          "conditions": "a>0 and |x|<a; inverse sine in radians.",
+          "evidence": {
+            "file": "EM1 Notes - ver17Mar26.pdf",
+            "section": "EM1-6.7 Integration Leading to Inverse Trigonometric Functions",
+            "page": "116"
+          }
+        },
+        {
+          "id": "MSA-AREA",
+          "name": "Area under a nonnegative curve",
+          "page": 2,
+          "latex": "A=\\int_a^b y\\,dx",
+          "syllabusIds": ["EM1-7.5"],
+          "prerequisiteFor": [],
+          "conditions": "a<b and y=f(x) is nonnegative on [a,b]. Split sign-changing regions to calculate geometric area.",
+          "evidence": {
+            "file": "EM1 Notes - ver17Mar26.pdf",
+            "section": "EM1-7.5 Applications of the Definite Integrals - Area",
+            "page": "130"
+          }
+        },
+        {
+          "id": "MSA-MEAN",
+          "name": "Mean value of a function",
+          "page": 2,
+          "latex": "\\overline y=\\frac1{b-a}\\int_a^b y\\,dx",
+          "syllabusIds": ["EM1-7.5"],
+          "prerequisiteFor": [],
+          "conditions": "a<b. Supported by EM1 Tutorial 7 questions 5-8; contextual physical relationships must be supplied.",
+          "evidence": {
+            "file": "EM1 Notes - ver17Mar26.pdf",
+            "section": "EM1-7.5 Applications of the Definite Integrals - Area",
+            "page": "130"
+          }
+        }
+      ],
+      "excluded": [
+        "Vectors and conic-section methods",
+        "Series, Fourier series and transforms",
+        "Newton method and multivariable approximation",
+        "Integration by parts, numerical integration, arc length, centroid, RMS and volume of revolution",
+        "The printed 3x3 inverse calculation (EM1 inverse calculation is restricted to the taught 2x2 method)",
+        "Differential equations",
+        "Probability, statistics and regression",
+        "Boolean algebra, Laplace transforms and hyperbolic functions"
+      ],
+      "policy": "Only mapped entries are available. A sheet formula never authorises a new assessed topic or prerequisite. Remaining sheet content is retained in the original PDF for other modules, without enabling it for EM1."
+    }
+  }
+}

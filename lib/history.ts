@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { briefSchema, draftSchema, feasibilitySchema } from './schema';
+import { storedBriefSchema, draftSchema, feasibilitySchema } from './schema';
 
 const referenceSchema = z.object({
   totalMarks: z.string().nullable(),
@@ -17,7 +17,7 @@ const referenceSchema = z.object({
   questionType: z.enum(['MCQ', 'Structured']).optional(),
   alternativeMarking: z.array(z.unknown()).optional(),
 });
-export const resultSchema = z.object({
+const resultSnapshotSchema = z.object({
   manual: z.boolean().optional(),
   draft: draftSchema,
   references: z.array(referenceSchema),
@@ -27,13 +27,22 @@ export const resultSchema = z.object({
     format_passed: z.boolean().optional(),
     issues: z.array(z.string()),
     summary: z.string(),
+    context_passed: z.boolean().optional(),
+    context_summary: z.string().optional(),
+    scope_evidence: z
+      .array(z.object({ task: z.string(), evidence: z.string() }))
+      .optional(),
+    non_routine_passed: z.boolean().optional(),
+    non_routine_parts: z.array(z.string()).optional(),
+    preservation_passed: z.boolean().optional(),
+    preservation_notes: z.string().optional(),
   }),
   calculations: z.array(
     z.object({ expression: z.string(), result: z.string() }),
   ),
   exactExamples: z.number(),
-  brief: briefSchema,
-  effectiveBrief: briefSchema,
+  brief: storedBriefSchema,
+  effectiveBrief: storedBriefSchema,
   feasibility: feasibilitySchema,
   promptVersion: z.string().optional(),
   promptHash: z.string().optional(),
@@ -42,6 +51,35 @@ export const resultSchema = z.object({
   auditWarning: z.string().optional(),
   generationMode: z.enum(['new', 'similar']).optional(),
   sourceQuestionId: z.string().optional(),
+  similarVariation: z
+    .object({ numbers: z.boolean(), context: z.boolean() })
+    .optional(),
+  terminologyRules: z
+    .array(
+      z.object({
+        id: z.string(),
+        avoid: z.string(),
+        prefer: z.string(),
+        reason: z.string(),
+        revision: z.number(),
+      }),
+    )
+    .optional(),
+  formulaSheet: z
+    .object({
+      version: z.string(),
+      title: z.string(),
+      sha256: z.string(),
+      entries: z.array(
+        z.object({
+          id: z.string(),
+          name: z.string(),
+          page: z.number(),
+          latex: z.string(),
+        }),
+      ),
+    })
+    .optional(),
   provider: z.string().optional(),
   model: z.string().optional(),
   reasoning: z.string().optional(),
@@ -49,7 +87,45 @@ export const resultSchema = z.object({
     .array(z.object({ expression: z.string(), result: z.string() }))
     .optional(),
 });
+export const resultSchema = resultSnapshotSchema.extend({
+  previousVersions: z
+    .array(
+      z.object({
+        savedAt: z.iso.datetime(),
+        change: z.string().max(3000),
+        result: resultSnapshotSchema,
+      }),
+    )
+    .default([]),
+});
 export type Result = z.infer<typeof resultSchema>;
+export function recordRefinement(
+  previous: Result,
+  next: Result,
+  change: string,
+): Result {
+  const { previousVersions, ...snapshot } = previous;
+  return {
+    ...next,
+    previousVersions: [
+      ...previousVersions,
+      {
+        savedAt: new Date().toISOString(),
+        change: change.slice(0, 3000),
+        result: snapshot,
+      },
+    ],
+  };
+}
+export function restoreVersion(current: Result, index: number): Result {
+  const version = current.previousVersions[index];
+  if (!version) throw new Error('This refinement version is unavailable.');
+  return recordRefinement(
+    current,
+    { ...version.result, previousVersions: [] },
+    `Restored version ${index + 1}`,
+  );
+}
 export type Ref = Result['references'][number];
 export const HISTORY_KEY = 'msa-question-history-v1';
 const historySchema = z

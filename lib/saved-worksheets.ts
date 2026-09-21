@@ -14,6 +14,35 @@ export type SavedWorksheetSummary = {
 export type SavedWorksheet = SavedWorksheetSummary & {
   configuration: Worksheet;
 };
+export type WorksheetUsage = {
+  id: string;
+  title: string;
+  section: string;
+  questionRevision: number;
+  worksheetRevision: number;
+};
+export async function worksheetUsage() {
+  const rows = await store.all<SavedWorksheetSummary & { config_json: string }>(
+    `SELECT ${columns},config_json FROM worksheet_configs ORDER BY updated_at DESC,id`,
+  );
+  const byQuestion = new Map<string, WorksheetUsage[]>();
+  for (const row of rows) {
+    const config = worksheetConfigSchema.parse(JSON.parse(row.config_json));
+    for (const section of config.sections)
+      for (const question of section.questions) {
+        const uses = byQuestion.get(question.id) || [];
+        uses.push({
+          id: row.id,
+          title: row.title,
+          section: section.name,
+          questionRevision: question.revision,
+          worksheetRevision: row.revision,
+        });
+        byQuestion.set(question.id, uses);
+      }
+  }
+  return byQuestion;
+}
 const columns = 'id,title,revision,created_at,updated_at';
 export async function listWorksheets() {
   return store.all<SavedWorksheetSummary>(

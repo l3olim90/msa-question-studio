@@ -116,6 +116,8 @@ async function migrateLocal() {
     const tables = [
       'repository_questions',
       'repository_revisions',
+      'worksheet_configs',
+      'terminology_rules',
       'traces',
       'trace_spans',
     ];

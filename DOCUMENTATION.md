@@ -1,6 +1,6 @@
 # MSA Question Studio: technical documentation
 
-Version: 2026-09-19
+Version: 2026-09-21
 
 ## Architecture
 
@@ -39,7 +39,7 @@ Before semantic review, a KaTeX parse failure now gets one targeted formatting r
 | File | Responsibility |
 | --- | --- |
 | `app/page.tsx` | Server component sends active taxonomy, module labels to the client. No provider secrets are passed. |
-| `app/workspace.tsx` | Brief controls, reference preview, generation/refinement, candidate and solution paging, theme and export. Reference fetches debounce by 350 ms. |
+| `app/workspace.tsx` | Brief controls, reference preview, generation/refinement, candidate and solution paging, theme and export. New-question retrieval runs only on Generate; similar-source browsing runs only on an explicit Browse action. |
 | `app/api/references/route.ts` | Read-only retrieval preview for the current brief. |
 | `app/api/generate/route.ts` | Authenticated/bounded generation; credentials come only from server configuration. |
 | `app/api/desmos/route.ts` | Validates graph metadata and returns Desmos expressions and the browser API key. |
@@ -50,7 +50,7 @@ Before semantic review, a KaTeX parse failure now gets one targeted formatting r
 | `lib/security.ts`, `proxy.ts` | HTTP guards, request bounds and response security headers. |
 | `lib/word.ts`, `lib/word-shapes.ts` | DOCX ZIP/OOXML, native OMML math and grouped DrawingML shapes. |
 
-Generation requests contain `{brief, previous?, edit?, mode?, sourceIds?, sessionId?, questionId?}`. Session/question identifiers are validated correlation labels, not authentication identities. Browser-supplied connections are rejected, and key headers are never used. Successful responses contain `draft`, `references`, `review`, `feasibility`, `calculations`, `brief`, `effectiveBrief`, `promptVersion` and `promptHash`. New MCQ requests return `{candidates: [...]}`.
+Generation requests contain `{brief, previous?, edit?, mode?, sourceQuestionId?, variation?, sessionId?, questionId?}`. Session/question identifiers are validated correlation labels, not authentication identities. Browser-supplied connections are rejected, and key headers are never used. Successful responses contain `draft`, `references`, `review`, `feasibility`, `calculations`, `brief`, `effectiveBrief`, `promptVersion` and `promptHash`. New MCQ requests return `{candidates: [...]}`.
 
 Similar Structured generation omits creative-context and part-count controls from planning, authoring and review. The selected base supplies the task structure; request normalization ignores stale hidden controls and clears additional specifications before initial generation. Subsequent refinement instructions remain available through the edit field. Generation, repair, refinement and repository approval skip requested-part-count checks in similar mode while retaining unique part labels, question-type rules, schema bounds, syllabus scope and marking totals. New Structured questions retain their explicit part-count controls.
 
@@ -63,11 +63,12 @@ Similar Structured generation omits creative-context and part-count controls fro
 | `repository_questions` | Current approved result JSON, indexed module/topic/type/title/marks, current revision and timestamps; deletion timestamp excludes inactive entries. |
 | `repository_revisions` | Complete approved snapshots keyed by question ID and revision. |
 | `repository_events` | Approval, replacement and deletion events. |
+| `terminology_rules` | Shared module wording preferences with avoid/prefer/reason fields, revision checks and timestamps. |
 | `traces` | Request identity, operation, timing/status, module, app/prompt versions/hash and redacted input/output/error. |
 | `trace_spans` | Model-call identity, parent trace, provider/model, timing, provider usage and redacted content/error. |
 | `import_jobs` | Upload/extraction/review/commit status and processing log. |
 
-`POST /api/repository` requires explicit `approved: true`. Updates and deletes use expected revision checks within an immediate transaction. A refinement is only a working draft until a new approval atomically updates the current snapshot and appends a revision. Soft-deleted entries cannot be reopened or assembled; audit snapshots remain. `GET /api/repository` supports module/title filters and full entry retrieval. Complete result metadata, review fields, prompt identity, references, current calculation ledger and exploratory history survive a save/load round trip.
+`POST /api/repository` requires explicit `approved: true`. Updates and deletes use expected revision checks within an immediate transaction. A refinement is only a working draft until a new approval atomically updates the current snapshot and appends a revision. Soft-deleted entries cannot be reopened or assembled; audit snapshots remain. `GET /api/repository` supports module/title filters and full entry retrieval. Complete result metadata, review fields, prompt identity, references, current calculation ledger, formula-sheet identity, applied terminology rules and prior refinement snapshots survive a save/load round trip. `recordRefinement` retains the previous result and edit instruction; `restoreVersion` appends the current snapshot before restoring an earlier one. Revisions stay within their question/candidate. Legacy brief parsing preserves old marks; new Basic Structured generation enforces 10 marks.
 
 `app/library.tsx` provides repository management and worksheet assembly. Cards show effective difficulty and the main topic, with native drag/drop and position/section menus. Status outputs occupy normal block flow to avoid overlapping the heading or description. `POST /api/worksheets` resolves selected IDs and revisions against current approved entries, rejecting stale/deleted selections and duplicates. `worksheetDocument` reuses the individual DOCX renderer, creates unique image relationships/drawing IDs per question, preserves native equations/editable geometry, and includes named sections, continuous numbering, totals, optional identity fields, student instructions, a separate answer key and AI disclosure. Lecturer exports place every main/alternative worked solution and marking allocation immediately after its question. Generated drafts include `answer_key`; legacy results default it to empty and use the main solution for their key.
 
@@ -90,6 +91,18 @@ The document contains the authoring and planning system prompts, shared Structur
 `AUDIT_CAPTURE_CONTENT=true` is the default for local traceability. Setting it to false omits input/output content while retaining timing/status, prompt identity, usage and redacted errors. Credentials from environment variables, authorization/header fields, image bytes, encrypted/hidden reasoning, and nested JSON equivalents are excluded. Content fields over two million characters retain an explicitly truncated preview. This is not a general personal-data anonymizer. Traces inherit the installation's access controls; configure filesystem access and backup/retention locally. No automatic retention purge is performed.
 
 Database logging failure does not discard a valid generated question: it emits a server warning and an `auditWarning` in successful question results. Running records can remain after a process crash. Rejected requests before the generation wrapper (missing server key, invalid envelope, capacity) do not create generation traces. Approval/replacement/deletion are separate transactional repository events. Browser retries are separate traces with the same question correlation. ?Stop waiting? cancels only the browser wait; server work may finish and be traced. Stored snapshots are not a cryptographically tamper-proof compliance ledger.
+
+## Team feedback and formula grounding
+
+`quality_contract` is required in the external prompt configuration and applied to planning, authoring, repair and independent review. Reviews must return explicit context, preservation and non-routine checks and affirmative task-by-task syllabus evidence. Any failed required check forces repair/rejection even when the model reports an overall pass. Refinement review receives the original draft and edit; the second repair also remains surgical. The calculator ledger still starts fresh for each current draft.
+
+`/api/terminology` supports explicit shared rule creation, editing and removal through revision-checked transactions. Module rules are attached to each generation snapshot and supplied as data, never overriding the system contract. Deterministic whole-phrase checks reject saved avoid terms in questions, answers, solutions, rubrics and diagram labels. EM1 additionally avoids locus/antiderivative wording and similar-triangle derivations through its module contract. This is saved feedback retrieval, not model training.
+
+`/api/source-questions` returns all active, eligible, same-module/topic/type questions matching selected sub-topics. This list is independent of the six-example authoring shortlist. The selected source ID is revalidated server-side and included in the authoring context, references and images, even if outside that shortlist. MCQ similar generation honours selected sub-topics and the same base for all candidates. Optional numeric/formula and context preferences reach every stage.
+
+`data/formula-catalog.json` maps 25 formula groups from the user-supplied four-page MSA sheet to EM1 note sections, with conditions and PDF page provenance. `formulasForBrief` filters by module and selected sub-topics, with explicit prerequisite-only mappings for later applications. Only this filtered content reaches planning/authoring/review; the full multi-module sheet is never used as syllabus authority. Review still needs evidence from notes for every tested method. The result records the catalogue version, original PDF hash and available entries. The PDF endpoint checks its hash; the Vercel build packages the PDF with the server, rather than exposing it as a public asset.
+
+Repository summaries derive worksheet membership from current saved configurations, retaining section and selected question revision. Renaming/removing questions or deleting a saved worksheet is reflected in the next repository refresh. This tracks saved membership, not export history or unsaved browser work.
 
 ## Retrieval and prompt efficiency
 
@@ -177,4 +190,6 @@ Run `pnpm typecheck`, `pnpm test`, `pnpm bank validate`, `pnpm build`, then `pnp
 - `migration-check.ts`: `.env` settings selection, password-free access and origin/body/concurrency checks, payload-size comparison and an isolated EM2 import fixture. It tests unverified/duplicate rejection, real image cropping, data backups and deprecation without changing the production bank.
 - `updates-check.ts`: editable filled geometry and visible AI disclosure in DOCX XML; session-history round trips and refinement counts; prompt parsing/version/hash; module-qualified prompt configuration. `features-check.ts` additionally checks SQLite lifecycle and cross-process persistence, revision conflicts, authenticated routes, student/lecturer worksheet structure, local audit content/usage/redaction/isolation, similar-question provenance, configuration recommendations and import approval gates.
 
-For the 2026-09-18 changes, see `VALIDATION.md` for the current checks and remaining verification boundaries. Tests use isolated temporary SQLite databases and source-bank fixtures; they do not approve synthetic questions in the live repository or incur provider charges.
+`team-check.ts` tests fixed Basic/MCQ marks, legacy compatibility, refinement restore/persistence and candidate isolation, shared terminology revision conflicts, worksheet membership, selected sources beyond the shortlist, formula source hash/LaTeX/scope filtering, and quality repair gates.
+
+For the 2026-09-21 changes, see `VALIDATION.md` for the current checks and remaining verification boundaries. Tests use isolated temporary SQLite databases and source-bank fixtures; they do not approve synthetic questions in the live repository or incur provider charges.

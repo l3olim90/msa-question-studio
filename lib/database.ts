@@ -34,6 +34,12 @@ export function database() {
         'This database needs a newer version of Question Studio.',
       );
     db.exec(`
+      CREATE TABLE IF NOT EXISTS terminology_rules (
+        id TEXT PRIMARY KEY, module TEXT NOT NULL, avoid TEXT NOT NULL,
+        prefer TEXT NOT NULL, reason TEXT NOT NULL, revision INTEGER NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS terminology_module_term ON terminology_rules(module,lower(avoid));
       CREATE TABLE IF NOT EXISTS worksheet_configs (
         id TEXT PRIMARY KEY, title TEXT NOT NULL, revision INTEGER NOT NULL,
         config_json TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL

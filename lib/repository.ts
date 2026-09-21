@@ -7,6 +7,7 @@ import { HttpError } from './security';
 import { validateDraft } from './generation';
 import { retrieve } from './retrieval';
 import type { Result } from './history';
+import { worksheetUsage, type WorksheetUsage } from './saved-worksheets';
 
 export type RepositorySummary = {
   id: string;
@@ -19,6 +20,7 @@ export type RepositorySummary = {
   revision: number;
   created_at: string;
   updated_at: string;
+  worksheets?: WorksheetUsage[];
 };
 export type RepositoryEntry = RepositorySummary & { result: Result };
 const columns =
@@ -33,8 +35,10 @@ export async function listQuestions(module = '', search = '') {
     search,
     search,
   );
+  const usage = await worksheetUsage();
   return rows.map(({ result_json, ...summary }) => ({
     ...summary,
+    worksheets: usage.get(summary.id) || [],
     difficulty: resultSchema.parse(JSON.parse(result_json)).effectiveBrief
       .difficulty,
   }));
@@ -69,7 +73,10 @@ export async function approveQuestion(
   if (
     !result.review.passed ||
     result.review.scope_passed === false ||
-    result.review.format_passed === false
+    result.review.format_passed === false ||
+    result.review.context_passed === false ||
+    result.review.non_routine_passed === false ||
+    result.review.preservation_passed === false
   )
     throw new HttpError(
       422,
@@ -79,7 +86,7 @@ export async function approveQuestion(
   await withBank(() =>
     validateDraft(
       result.draft,
-      retrieve(result.effectiveBrief),
+      retrieve(result.effectiveBrief, true),
       result.generationMode,
     ),
   );

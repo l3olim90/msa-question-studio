@@ -68,6 +68,7 @@ fixture.brief.subtopics =
   fixture.feasibility.selected_subtopics =
     ['EM1-2.3'];
 fixture.draft.answer_key = 'The blue and green shaded regions represent water.';
+Object.assign(fixture.review, {context_passed:true,context_summary:'No real-world scenario in this fixture.',scope_evidence:[{task:'Fixture task',evidence:'Fixture selected syllabus excerpt.'}],non_routine_passed:true,non_routine_parts:[],preservation_passed:true,preservation_notes:'Fixture preserves the baseline.',});
 fixture.review.scope_passed = true;
 fixture.review.format_passed = true;
 fixture.promptVersion = loadPrompts('EM1').version;
@@ -455,6 +456,7 @@ try {
   assert.equal(loadPrompts('EM2').moduleVersion, null);
   assert.notEqual(loadPrompts('EM1').hash, loadPrompts('EM2').hash);
   assert.throws(() => loadPrompts('../EM1'));
+  fixture.brief.difficulty = fixture.effectiveBrief.difficulty = 'Intermediate';
   const ctx = retrieve(fixture.brief);
   const base = ctx.examples.find((q) => q.question_type === 'Written')!;
   assert.equal(
@@ -498,7 +500,7 @@ try {
       body.text.format.name === 'marks_feasibility'
         ? fixture.feasibility
         : body.text.format.name === 'review'
-          ? { ...fixture.review, passed: ++similarReviews > 1, scope_passed: true, format_passed: true, issues: similarReviews === 1 ? ['Clarify the wording.'] : [] }
+          ? { ...fixture.review, passed: ++similarReviews > 1, context_passed:true,context_summary:'No real-world scenario in this fixture.',scope_evidence:[{task:'Fixture task',evidence:'Fixture selected syllabus excerpt.'}],non_routine_passed:true,non_routine_parts:[],preservation_passed:true,preservation_notes:'Fixture preserves the baseline.',scope_passed: true, format_passed: true, issues: similarReviews === 1 ? ['Clarify the wording.'] : [] }
           : sourceDraft;
     return Response.json({
       output: [
@@ -571,7 +573,7 @@ try {
           ? {
               ...fixture.review,
               passed: ++keyReviews > 1,
-              scope_passed: true,
+              context_passed:true,context_summary:'No real-world scenario in this fixture.',scope_evidence:[{task:'Fixture task',evidence:'Fixture selected syllabus excerpt.'}],non_routine_passed:true,non_routine_parts:[],preservation_passed:true,preservation_notes:'Fixture preserves the baseline.',scope_passed: true,
               format_passed: true,
               issues: keyReviews === 1 ? ['Clarify the wording.'] : [],
             }

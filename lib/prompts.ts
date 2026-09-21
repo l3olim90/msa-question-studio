@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 
 export const promptNames = [
+  'quality_contract',
   'structured_contract',
   'author',
   'planner',

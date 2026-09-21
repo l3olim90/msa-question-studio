@@ -152,3 +152,21 @@ fieldset{border:0;padding:0;margin:0;min-width:0}.paper-meta{display:flex;justif
 .worksheet-question>strong{display:block;line-height:1.5}.worksheet-question .row-actions{margin:0}.question-metadata{font-size:14px;line-height:1.5;color:var(--muted-foreground)}
 .drag-handle{display:flex;align-items:center;gap:6px;align-self:flex-start;background:transparent;border:0;color:var(--primary);font-size:13px;cursor:grab;padding:5px 0}.drag-handle:active{cursor:grabbing}.drag-handle:focus-visible{outline:2px solid var(--ring);outline-offset:4px}
 .is-dragging{opacity:.45}.drop-target{outline:2px solid var(--primary);outline-offset:2px}.worksheet-drop-zone{padding:12px;border:1px dashed var(--border);border-radius:6px;text-align:center;color:var(--muted-foreground);font-size:13px;line-height:1.5}
+
+/* Team review tools */
+.source-browser, .refinement-history, .terminology-rules, .section-setup { border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin: 16px 0; }
+.source-scroll { max-height: 520px; overflow-y: auto; overscroll-behavior: contain; }
+.source-card { padding: 12px 8px; border-bottom: 1px solid var(--border); }
+.source-card.selected { border-left: 3px solid var(--primary); padding-left: 12px; }
+.source-card img, .revision-comparison img { max-width: 100%; height: auto; }
+.source-card .math-text { overflow-wrap: anywhere; }
+.context-notice { border-left: 3px solid #a56a13; padding: 10px 14px; margin: 12px 0; font-size: .875rem; line-height: 1.55; }
+.revision-comparison { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 20px; margin-top: 16px; }
+.revision-comparison > section { min-width: 0; padding: 12px; border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; }
+.refinement-history summary, .terminology-rules summary, .worksheet-usage summary { cursor: pointer; font-weight: 600; }
+.terminology-form, .section-setup-fields { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
+.terminology-form > label, .section-setup-fields > label { flex: 1; min-width: 180px; }
+.terminology-row, .worksheet-usage { padding: 12px 0; border-bottom: 1px solid var(--border); }
+.section-setup h2 { margin: 0; font-size: 1.15rem; }
+.section-setup { background: var(--card); }
+@media (max-width: 760px) { .revision-comparison { grid-template-columns: minmax(0,1fr); } }

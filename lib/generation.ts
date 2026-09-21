@@ -23,11 +23,24 @@ import {
 import { retrieve, references } from './retrieval';
 import { calculate } from './calculator';
 import { selectBase, similarBrief, type GenerationOptions } from './similar';
+import { sourceQuestions } from './retrieval';
+import { listTerminology, terminologyIssues } from './terminology';
+import { formulasForBrief } from './formula-catalog';
+import { verifyFormulaSource } from './formula-source';
 import katex from 'katex';
 // Hidden new-question controls must not constrain similar or MCQ authoring.
-function authoringBrief(brief: ReturnType<typeof retrieve>['brief'], mode: 'new' | 'similar') {
+function authoringBrief(
+  brief: ReturnType<typeof retrieve>['brief'],
+  mode: 'new' | 'similar',
+) {
   if (mode === 'similar') {
-    const { creativeContext: _creative, multipleParts: _multiple, autoParts: _auto, partCount: _count, ...sourceBrief } = brief;
+    const {
+      creativeContext: _creative,
+      multipleParts: _multiple,
+      autoParts: _auto,
+      partCount: _count,
+      ...sourceBrief
+    } = brief;
     return sourceBrief;
   }
   const { multipleParts, partCount: _partCount, ...common } = brief;
@@ -95,8 +108,11 @@ export function validateDraft(
       d.correct_option !== null ||
       new Set(d.parts.map((p) => p.label)).size !== d.parts.length
     )
-      throw new Error('A structured question must have unique part labels, no MCQ options and no correct-option selection.');
-    if (mode !== 'similar' &&
+      throw new Error(
+        'A structured question must have unique part labels, no MCQ options and no correct-option selection.',
+      );
+    if (
+      mode !== 'similar' &&
       (ctx.brief.multipleParts && ctx.brief.autoParts
         ? d.parts.length < 2 || d.parts.length > 6
         : d.parts.length !==
@@ -157,15 +173,44 @@ async function generateInBank(
   candidateContext?: { index: number; prior: Draft[] },
   options: GenerationOptions = {},
 ) {
-  const mode = options.mode === 'similar' || (previous && options.sourceQuestionId) ? 'similar' : 'new';
-  const requested = retrieve(mode === 'similar' ? similarBrief(raw, !!previous) : raw);
+  const mode =
+    options.mode === 'similar' || (previous && options.sourceQuestionId)
+      ? 'similar'
+      : 'new';
+  const requested = retrieve(
+    mode === 'similar' ? similarBrief(raw, !!previous) : raw,
+  );
   const base = previous
-    ? requested.examples.find((q) => q.question_id === options.sourceQuestionId)
+    ? options.sourceQuestionId
+      ? sourceQuestions(requested.brief).find(
+          (q) => q.question_id === options.sourceQuestionId,
+        )
+      : undefined
     : selectBase(requested, options);
+  if (
+    base &&
+    !requested.examples.some((q) => q.question_id === base.question_id)
+  )
+    requested.examples = [base, ...requested.examples].slice(0, 6);
+  const terminologyRules = await listTerminology(requested.brief.module);
+  if (requested.brief.useFormulaSheet) verifyFormulaSource();
   const generationContext = {
     generation_mode:
       base || (previous && options.sourceQuestionId) ? 'similar' : 'new',
     base_reference: base ? promptExamples([base])[0] : null,
+    similar_variation: options.variation || { numbers: false, context: false },
+    saved_terminology_rules: terminologyRules.map(
+      ({ id, avoid, prefer, reason, revision }) => ({
+        id,
+        avoid,
+        prefer,
+        reason,
+        revision,
+      }),
+    ),
+    available_formula_sheet: requested.brief.useFormulaSheet
+      ? formulasForBrief(requested.brief)
+      : null,
   };
   const prompts = loadPrompts(requested.brief.module);
   await recordPrompt(prompts.version, prompts.hash, requested.brief.module);
@@ -192,7 +237,9 @@ async function generateInBank(
     ' ' +
     prompts.moduleContext +
     ' ' +
-    prompts.text.similar;
+    prompts.text.similar +
+    ' ' +
+    prompts.text.quality_contract;
   let input: any[] = [
     {
       role: 'user',
@@ -226,7 +273,19 @@ async function generateInBank(
             edit: edit.slice(0, 3000),
           }),
         },
-        ...(await Promise.all(refs.map(async (ref) => ({...ref, images: await Promise.all(ref.images.map(async img => ({...img, url: await referenceImage(img.name, img.url)})))})))).flatMap((ref) =>
+        ...(
+          await Promise.all(
+            refs.map(async (ref) => ({
+              ...ref,
+              images: await Promise.all(
+                ref.images.map(async (img) => ({
+                  ...img,
+                  url: await referenceImage(img.name, img.url),
+                })),
+              ),
+            })),
+          )
+        ).flatMap((ref) =>
           ref.images.flatMap((img) => [
             {
               type: 'input_text',
@@ -243,7 +302,9 @@ async function generateInBank(
     ' ' +
     prompts.moduleContext +
     ' ' +
-    prompts.text.similar;
+    prompts.text.similar +
+    ' ' +
+    prompts.text.quality_contract;
   const planBody = {
     instructions: planInstructions,
     input: JSON.stringify({
@@ -251,6 +312,7 @@ async function generateInBank(
       user_instructions: prompts.text.user_context,
       brief: authoringBrief(ctx.brief, mode),
       edit,
+      previous: previous ? draftSchema.parse(previous) : null,
       candidate_context: candidateContext
         ? {
             index: candidateContext.index,
@@ -310,6 +372,9 @@ async function generateInBank(
     totalMarks: feasibility.total_marks,
     specifications: feasibility.resolved_specifications,
   });
+  generationContext.available_formula_sheet = ctx.brief.useFormulaSheet
+    ? formulasForBrief(ctx.brief)
+    : null;
   // Planning can narrow coverage; preserve the originally selected base and its diagrams.
   if (base && !ctx.examples.some((q) => q.question_id === base.question_id))
     ctx.examples = [base, ...ctx.examples].slice(0, 6);
@@ -348,7 +413,19 @@ async function generateInBank(
             configuration_adjustments: feasibility,
           }),
         },
-        ...(await Promise.all(refs.map(async (ref) => ({...ref, images: await Promise.all(ref.images.map(async img => ({...img, url: await referenceImage(img.name, img.url)})))})))).flatMap((ref) =>
+        ...(
+          await Promise.all(
+            refs.map(async (ref) => ({
+              ...ref,
+              images: await Promise.all(
+                ref.images.map(async (img) => ({
+                  ...img,
+                  url: await referenceImage(img.name, img.url),
+                })),
+              ),
+            })),
+          )
+        ).flatMap((ref) =>
           ref.images.flatMap((img) => [
             {
               type: 'input_text',
@@ -506,7 +583,9 @@ async function generateInBank(
           ' ' +
           prompts.moduleContext +
           ' ' +
-          prompts.text.similar,
+          prompts.text.similar +
+          ' ' +
+          prompts.text.quality_contract,
         input: JSON.stringify({
           candidate_context: candidateContext
             ? {
@@ -527,6 +606,9 @@ async function generateInBank(
             excerpt: s.syllabus_excerpt,
           })),
           draft,
+          previous: previous ? draftSchema.parse(previous) : null,
+          edit,
+          allowed_same_topic_prerequisites: ctx.allowed,
           authoring_calculation_history: calcLog,
         }),
         text: {
@@ -542,6 +624,39 @@ async function generateInBank(
     );
     currentCalculations = reviewed.calculations;
     const checked = reviewSchema.parse(readJSON(reviewed.response));
+    const wordingIssues = terminologyIssues(draft!, [
+      ...terminologyRules,
+      ...(ctx.brief.module === 'EM1'
+        ? [
+            { avoid: 'locus', prefer: 'path' },
+            { avoid: 'antiderivative', prefer: 'indefinite integral' },
+            { avoid: 'antiderivatives', prefer: 'indefinite integrals' },
+          ]
+        : []),
+    ]);
+    if (wordingIssues.length) {
+      checked.scope_passed = false;
+      checked.issues.push(...wordingIssues);
+    }
+    if (!checked.scope_evidence.length) {
+      checked.scope_passed = false;
+      checked.issues.push(
+        'Supply affirmative syllabus evidence for every assessed task and required method.',
+      );
+    }
+    if (ctx.brief.nonRoutine && !checked.non_routine_parts.length) {
+      checked.non_routine_passed = false;
+      checked.issues.push(
+        'Identify and verify at least one non-routine task requiring interpretation and method choice.',
+      );
+    }
+    if (
+      !checked.context_passed ||
+      !checked.non_routine_passed ||
+      !checked.preservation_passed ||
+      !checked.scope_passed
+    )
+      checked.passed = false;
     const shadingRequested = /\bshad(?:ed|ing)\b/i.test(
       requested.brief.specifications +
         ' ' +
@@ -577,7 +692,8 @@ async function generateInBank(
     repair < repairLimit;
     repair++
   ) {
-    const strategy = repair === 0 ? prompts.text.repair : prompts.text.reauthor;
+    const strategy =
+      repair === 0 || previous ? prompts.text.repair : prompts.text.reauthor;
     const repaired = await response(key, {
       instructions:
         instructions + ' ' + strategy + ' ' + prompts.text.repair_checks,
@@ -605,7 +721,7 @@ async function generateInBank(
   }
   if (!review.passed || !review.scope_passed || !review.format_passed)
     throw new DraftReviewError(
-      'The question could not pass the module-scope and question-format checks after revision. ' +
+      'The question could not pass the module-scope, context-plausibility and question-format checks after revision. ' +
         review.issues.slice(0, 3).join(' '),
     );
 
@@ -630,6 +746,18 @@ async function generateInBank(
       : 'new') as 'new' | 'similar',
     sourceQuestionId:
       base?.question_id || (previous ? options.sourceQuestionId : undefined),
+    similarVariation: mode === 'similar' ? options.variation : undefined,
+    terminologyRules: generationContext.saved_terminology_rules,
+    formulaSheet: generationContext.available_formula_sheet
+      ? {
+          version: generationContext.available_formula_sheet.version,
+          title: generationContext.available_formula_sheet.source.title,
+          sha256: generationContext.available_formula_sheet.source.sha256,
+          entries: generationContext.available_formula_sheet.entries.map(
+            ({ id, name, page, latex }) => ({ id, name, page, latex }),
+          ),
+        }
+      : undefined,
     promptModule: prompts.module,
     promptVersion: prompts.version,
     promptHash: prompts.hash,
@@ -657,6 +785,12 @@ export function validatePlan(value: unknown, ctx: ReturnType<typeof retrieve>) {
   const plan = feasibilitySchema.parse(value);
   if (ctx.brief.questionType === 'MCQ' && plan.total_marks !== 2)
     throw new Error('MCQ plans must retain exactly 2 marks.');
+  if (
+    ctx.brief.questionType === 'Structured' &&
+    ctx.brief.difficulty === 'Basic' &&
+    plan.total_marks !== 10
+  )
+    throw new Error('Basic Structured plans must retain exactly 10 marks.');
   const requested = new Set(ctx.brief.subtopics);
   const chosen = new Set(plan.selected_subtopics);
   const omitted = new Set(plan.omitted_subtopics.map((s) => s.id));
@@ -700,4 +834,6 @@ export function promptExamples(rows: ReturnType<typeof retrieve>['examples']) {
   }));
 }
 
-export function generate(...args: Parameters<typeof generateInBank>) { return withBank(() => generateInBank(...args)); }
+export function generate(...args: Parameters<typeof generateInBank>) {
+  return withBank(() => generateInBank(...args));
+}

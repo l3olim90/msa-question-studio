@@ -116,10 +116,11 @@ export function Library({
       setSavedId(value.id);
       setSavedSnapshot(JSON.stringify(value.configuration));
       await loadSaved();
+      await load();
       setMessage('Worksheet saved. You can reopen it in a future session.');
     });
   }
-  async function openPaper() {
+  async function openPaper(id = savedId) {
     if (
       dirty &&
       !window.confirm('Open this worksheet and discard unsaved changes?')
@@ -127,7 +128,7 @@ export function Library({
       return;
     await act(async () => {
       const [value, repository] = await Promise.all([
-        studioApi<SavedWorksheet>('/api/worksheets/saved?id=' + savedId),
+        studioApi<SavedWorksheet>('/api/worksheets/saved?id=' + id),
         studioApi<{ questions: RepositorySummary[] }>('/api/repository'),
       ]);
       const c = value.configuration;
@@ -161,6 +162,8 @@ export function Library({
       setIncludeName(c.includeName);
       setIncludeClass(c.includeClass);
       setOpened(value);
+      setSavedId(value.id);
+      onView('worksheet');
       setSavedSnapshot(JSON.stringify(c));
       setMessage(
         changed
@@ -334,6 +337,71 @@ export function Library({
       {busy && (
         <output className="manager-progress">Preparing your request…</output>
       )}
+      <div className="section-setup" aria-label="Define worksheet sections">
+        <div>
+          <h2>1. Define sections</h2>
+          <p className="hint">
+            Name your sections, then choose where repository questions are
+            added.
+          </p>
+        </div>
+        <div className="section-setup-fields">
+          <label className="field">
+            Section to fill
+            <select value={target} onChange={(e) => setTarget(e.target.value)}>
+              {sections.map((section) => (
+                <option key={section.id} value={section.id}>
+                  {section.name || 'Unnamed section'} |{' '}
+                  {section.questions.length} questions
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field" htmlFor="section-setup-name">
+            Section name
+            <Input
+              id="section-setup-name"
+              maxLength={100}
+              value={sections.find((s) => s.id === target)?.name || ''}
+              onChange={(e) =>
+                setSections((current) =>
+                  current.map((s) =>
+                    s.id === target ? { ...s, name: e.target.value } : s,
+                  ),
+                )
+              }
+            />
+          </label>
+          <Button
+            variant="outline"
+            disabled={busy || sections.length >= 20}
+            onClick={() => {
+              const id = crypto.randomUUID();
+              setSections((current) => [
+                ...current,
+                {
+                  id,
+                  name: `Section ${String.fromCharCode(65 + current.length)}`,
+                  questions: [],
+                },
+              ]);
+              setTarget(id);
+            }}
+          >
+            Add section
+          </Button>
+          <Button
+            disabled={busy}
+            onClick={() =>
+              onView(view === 'repository' ? 'worksheet' : 'repository')
+            }
+          >
+            {view === 'repository'
+              ? `View worksheet (${selected.length})`
+              : '2. Choose repository questions'}
+          </Button>
+        </div>
+      </div>
       {view === 'repository' ? (
         <>
           <p className="hint">
@@ -395,6 +463,37 @@ export function Library({
                   {q.module} · {q.question_type} · {q.marks} marks · Revision{' '}
                   {q.revision} · {new Date(q.updated_at).toLocaleString()}
                 </p>
+                <details className="worksheet-usage">
+                  <summary>
+                    Used in {q.worksheets?.length || 0} saved worksheets
+                  </summary>
+                  <p className="hint">
+                    Saved worksheet membership; unsaved assemblies and
+                    downloaded files are not tracked.
+                  </p>
+                  {q.worksheets?.map((use) => (
+                    <div key={use.id + use.section}>
+                      <Button
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() => openPaper(use.id)}
+                      >
+                        {use.title}
+                      </Button>
+                      <span>
+                        {' '}
+                        | {use.section} | question revision{' '}
+                        {use.questionRevision}
+                        {use.questionRevision !== q.revision
+                          ? ' (earlier revision)'
+                          : ''}
+                      </span>
+                    </div>
+                  ))}
+                  {!q.worksheets?.length && (
+                    <p>No saved worksheet uses this question yet.</p>
+                  )}
+                </details>
                 <div className="row-actions">
                   <Button
                     disabled={busy}
@@ -432,7 +531,7 @@ export function Library({
                     <p>
                       Delete “{q.title}” from the approved repository? It will
                       be removed from this worksheet selection. Its revision
-                      history remains in the local audit database.
+                      history remains in the audit database.
                     </p>
                     <div className="row-actions">
                       <Button
@@ -504,7 +603,7 @@ export function Library({
                 <Button
                   variant="outline"
                   disabled={!savedId}
-                  onClick={openPaper}
+                  onClick={() => openPaper()}
                 >
                   Open worksheet
                 </Button>
@@ -574,6 +673,7 @@ export function Library({
                         setSavedId('');
                         setSavedSnapshot('');
                         await loadSaved();
+                        await load();
                         setMessage(
                           'Saved worksheet deleted. The current assembly is still available to save as a new worksheet.',
                         );
@@ -858,22 +958,6 @@ export function Library({
                 onClick={refreshSelected}
               >
                 Refresh selected questions
-              </Button>
-              <Button
-                variant="outline"
-                disabled={sections.length >= 20}
-                onClick={() =>
-                  setSections((current) => [
-                    ...current,
-                    {
-                      id: crypto.randomUUID(),
-                      name: `Section ${String.fromCharCode(65 + current.length)}`,
-                      questions: [],
-                    },
-                  ])
-                }
-              >
-                Add section
               </Button>
               <strong>
                 {selected.length} questions ·{' '}

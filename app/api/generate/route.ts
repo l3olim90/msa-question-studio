@@ -14,6 +14,7 @@ const payload = z
     mode: z.enum(['new', 'similar']).default('new'),
     sourceIds: z.array(z.string().max(100)).max(6).optional(),
     sourceQuestionId: z.string().min(1).max(100).optional(),
+    variation: z.object({numbers:z.boolean(),context:z.boolean()}).strict().optional(),
     sessionId: z.uuid().optional(),
     questionId: z
       .string()
@@ -57,6 +58,7 @@ export async function POST(request: Request) {
             mode: body.mode,
             sourceIds: body.sourceIds,
             sourceQuestionId: body.sourceQuestionId,
+            variation: body.variation,
           },
         },
         async () =>
@@ -64,6 +66,8 @@ export async function POST(request: Request) {
             ? await generateMcqCandidates(key, brief, connection, {
                 mode: body.mode,
                 sourceIds: body.sourceIds,
+                sourceQuestionId: body.sourceQuestionId,
+                variation: body.variation,
               })
             : await generate(
                 key,
@@ -75,9 +79,8 @@ export async function POST(request: Request) {
                 {
                   mode: body.mode,
                   sourceIds: body.sourceIds,
-                  sourceQuestionId: body.previous
-                    ? body.sourceQuestionId
-                    : undefined,
+                  sourceQuestionId: body.sourceQuestionId,
+                  variation: body.variation,
                 },
               ),
       ),

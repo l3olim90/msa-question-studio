@@ -1,6 +1,6 @@
 # MSA Question Studio
 
-Version: 2026-09-19
+Version: 2026-09-21
 
 See the [technical documentation](DOCUMENTATION.md) for the architecture, backend workflow, guardrails, tests and extension options.
 
@@ -46,7 +46,7 @@ pnpm start
 
 Restart after editing `.env`. Committed bank changes apply to the next reference retrieval; reload the page after adding modules or taxonomy entries. Installation/build, provider generation and Desmos require internet access to their respective services.
 
-Source checks reuse recent results for one minute and run only when retrieval inputs change. Marks, creative context and part settings do not restart them. Cloud source-bank reads use one database round trip and a one-minute cache; a cold connection may still take a few seconds. A stalled check offers a retry after 20 seconds.
+For new questions, source retrieval starts only after Generate is clicked. Configuration changes and typing do not trigger source searches. In similar mode, click Browse source questions to load the compatible bank, then select a source. Cloud source-bank reads use one database round trip and a one-minute cache.
 
 ## Configure a provider
 
@@ -67,24 +67,30 @@ The app opens without a separate username/password prompt. Vercel deployment pro
 ## Generate, refine and export
 
 1. Select an active module and main topic, then Structured or MCQ.
-2. Structured: choose sub-topics (All means within this topic), difficulty and marks. Defaults are Basic / 10 marks. Challenging sets 15 marks, editable afterward. Creative context and multiple parts are optional. Choose 2–6 parts or let the model decide.
+2. Structured: choose sub-topics (All means within this topic), difficulty and marks. Basic is fixed at 10 marks. Challenging defaults to 15 marks, editable afterward. Challenging questions can include a non-routine task that rewards interpretation and method selection rather than lengthy calculation. The optional MSA formula-sheet setting lets students consult only the formulas mapped to the selected syllabus scope. Creative context and multiple parts are optional. Choose 2–6 parts or let the model decide.
 3. Add methods, context, diagram, rounding or part-mark requirements. Related outputs may share a part; unrelated problems should be separate.
-4. Generate. MCQ mode produces three conceptual candidates, four options each, one correct answer and fixed 2-or-0 scoring. Page through them with the arrows.
+4. Generate. MCQ mode produces three conceptual candidates with minimal calculation, four options each, one correct answer and fixed 2-or-0 scoring. Page through them with the arrows.
 5. Review source references, solutions and proposed marks. Solution arrows expose alternative methods.
-6. Describe changes in the refinement field below the generated heading and apply/recheck.
+6. Describe changes in the refinement field below the generated heading and apply/recheck. Unaffected structure, given formulas and numbers are retained; dependent corrections are rechecked. Open **Refinement history** to compare or restore versions. Restoring keeps later refinements, and approval saves the history with the question.
 7. Export with **Export Word**. Word uses Times New Roman 11 pt, editable equations and black 1.5 pt grouped vector diagrams. Measurement arrows have two heads. Desmos graphs export as images. Filenames are `module_type_topic_difficulty.docx` for Structured and `module_type_topic.docx` for MCQ.
 
-Choose **New question from the brief** or **Similar question from a source** before generating. Similar mode randomly chooses one compatible few-shot example and records its identity; it changes numbers/context while retaining the central mathematical method. Creative-context and multiple-part controls are shown only for new Structured questions. Additional specifications are also hidden in similar mode: generate the variation first, then use Refine draft and recheck for changes. Similar questions follow the selected source structure; hidden or stale part settings do not constrain generation, refinement or repository approval. It produces a separate draft. **Refine draft and recheck** changes the displayed draft instead.
+Choose **New question from the brief** or **Similar question from a source** before generating. Similar mode lets you choose topic/sub-topics, browse and view compatible source questions across the knowledge base, and select the exact base. Optional **Change numbers / formulas** and **Change context** preferences guide the variation; leave both unchecked for AI to decide. The central mathematical method is retained and all dependent answers are recomputed. Creative-context and multiple-part controls are shown only for new Structured questions. Additional specifications are also hidden in similar mode: generate the variation first, then use Refine draft and recheck for changes. Similar questions follow the selected source structure; hidden or stale part settings do not constrain generation, refinement or repository approval. It produces a separate draft. **Refine draft and recheck** changes the displayed draft instead.
 
 **Drafts this visit** are temporary. Choose **Approve for repository** to keep a question across sessions. In **Approved repository**, open saved questions to view/refine them or delete them. Refining does not change the approved copy until **Approve replacement** is selected. Concurrent changes are detected: reopen the latest revision if another session has changed it. Old browser session drafts are recovered once for explicit approval; new drafts are no longer persisted automatically.
 
-In **Paper assembly**, add approved questions to named sections and drag their card grips to reorder them or move them between sections. Cards show the main topic and difficulty. Position and section menus support keyboard and touch. Set the title, optional Name/Class fields, and instructions. **Save worksheet** keeps this configuration in the app database across sessions; reopen it from **Saved worksheets** to edit or export. **Save changes** updates the opened worksheet; **Save as new worksheet** keeps a separate copy. Empty sections can be saved while planning but must be filled or removed before export. Unsaved edits remain only in the current page.
+The **Define sections** bar appears near the top of both repository and assembly views. Name or add sections there before selecting questions. Repository cards show which saved worksheets contain each question, including section and selected revision; unsaved assemblies and downloaded files are not tracked. In **Paper assembly**, add approved questions to named sections and drag their card grips to reorder them or move them between sections. Cards show the main topic and difficulty. Position and section menus support keyboard and touch. Set the title, optional Name/Class fields, and instructions. **Save worksheet** keeps this configuration in the app database across sessions; reopen it from **Saved worksheets** to edit or export. **Save changes** updates the opened worksheet; **Save as new worksheet** keeps a separate copy. Empty sections can be saved while planning but must be filled or removed before export. Unsaved edits remain only in the current page.
 
 Every **student Word** export contains questions followed by an answer key. **Lecturer Word** places each question immediately before its main solution, alternative solutions and marking allocations, with an answer key at the end. Both include the AI disclaimer. Older questions without a concise answer key use the main solution for their key. Saved worksheets keep approved question IDs and revisions; if a question is replaced or deleted later, use **Refresh selected questions** to accept current approved revisions and remove deleted questions, then save again. Export rejects outdated selections. Deleting a saved worksheet does not delete its repository questions.
 
 Word exports preserve solid fills in editable rectangles, ellipses, polylines and curves. Every export displays **“Question generated by AI. Review before assessment use.”** below its title.
 
 Review before assessment use. Automated checks do not guarantee correctness. Structured configuration adjustments explain omitted topics or changed marks; exact marks take priority. Failure messages begin **Question could not be generated.** Temporary service failures may retry once; unresolved material scope/math/format failures are not silently accepted.
+
+Creative scenarios are checked for plausible dimensions, configurations, scale and units; the app also reminds staff to check validity and reasonableness themselves. These are AI plausibility checks, not external fact verification.
+
+**Shared terminology rules** lets staff explicitly save, edit and remove module wording preferences for the whole team. Ordinary refinements are not silently learned. Saved rules are used by planning, authoring and review, with deterministic checks for prohibited phrases. Rules cannot add assessed syllabus content. EM1 wording avoids locus and antiderivative; similar-triangle derivations are excluded, so any needed contextual relationship must be given.
+
+The original four-page **MSA Formula Sheet.pdf** is retained in `data/`. `data/formula-catalog.json` contains 25 visually checked EM1 entries/groups, with PDF pages, domain conditions and mappings to the current notes. Only mapped entries for the selected sub-topics (or explicitly mapped prerequisites) reach the model. Material for other modules, including transforms, statistics, differential equations and advanced integration, stays outside EM1 generation. The full source is viewable through `/api/formula-sheet`. Formula availability never expands assessed scope. Updating the PDF requires verifying and updating the catalogue and source hash, then rebuilding; adding a module requires its own syllabus mapping. EM2 can reuse this same PDF without reimporting it: supply its syllabus/notes and map the permitted formulas before enabling formula-assisted EM2 generation.
 
 ## Edit the generation prompts
 

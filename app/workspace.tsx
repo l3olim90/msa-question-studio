@@ -18,14 +18,16 @@ import {
   Moon,
   BookOpen,
 } from 'lucide-react';
-import katex from 'katex';
+import { Maths } from './maths';
+import { RefinementHistory } from './refinement-history';
+import { TerminologyRules } from './terminology-rules';
+import { SourceBrowser } from './source-browser';
 import 'katex/dist/katex.min.css';
-import { mathParts } from '@/lib/math-text';
 import { svgDiagram } from '@/lib/diagram';
 import { type Brief } from '@/lib/schema';
+import { formulasForBrief } from '@/lib/formula-catalog';
 import { APP_VERSION } from '@/lib/version';
 import { configurationIssues } from '@/lib/configuration';
-import { referenceRequest } from '@/lib/reference-request';
 import { studioApi } from '@/lib/client-api';
 import type { RepositoryEntry } from '@/lib/repository';
 import { Library } from './library';
@@ -39,46 +41,13 @@ import {
   updateQuestion,
   selectQuestion,
   resultSchema,
+  recordRefinement,
+  restoreVersion,
   type QuestionHistory,
   type Result,
   type Ref,
 } from '@/lib/history';
-function Maths({ text }: { text: string }) {
-  const bits = [];
-  let pos = 0;
-  for (const m of mathParts(text)) {
-    bits.push(
-      <span key={`t${pos}`}>
-        {text.slice(pos, m.index).replace(/\\\$/g, '$')}
-      </span>,
-    );
-    let html;
-    try {
-      html = katex.renderToString(m.latex, {
-        displayMode: m.display,
-        throwOnError: true,
-        strict: 'ignore',
-        trust: false,
-      });
-    } catch {
-      html = null;
-    }
-    bits.push(
-      html ? (
-        <span
-          key={`m${m.index}`}
-          className={m.display ? 'display-equation' : ''}
-          dangerouslySetInnerHTML={{ __html: html }}
-        />
-      ) : (
-        <code key={`m${m.index}`}>{m.raw}</code>
-      ),
-    );
-    pos = m.index + m.raw.length;
-  }
-  bits.push(<span key="tail">{text.slice(pos).replace(/\\\$/g, '$')}</span>);
-  return <div className="math-text">{bits}</div>;
-}
+
 function save(data: BlobPart, name: string, type: string) {
   const url = URL.createObjectURL(new Blob([data], { type }));
   const a = document.createElement('a');
@@ -162,7 +131,15 @@ export default function Workspace({
     'new',
   );
   const [referenceError, setReferenceError] = useState(''),
-    [referencesLoading, setReferencesLoading] = useState(true);
+    [referencesLoading, setReferencesLoading] = useState(false);
+  const [selectedSource, setSelectedSource] = useState('');
+  const [sourceKey, setSourceKey] = useState('');
+  const [variation, setVariation] = useState({
+    numbers: false,
+    context: false,
+  });
+  const [nonRoutine, setNonRoutine] = useState(false);
+  const [useFormulaSheet, setUseFormulaSheet] = useState(true);
   const [repositoryRefresh, setRepositoryRefresh] = useState(0),
     [approvalMessage, setApprovalMessage] = useState('');
   const [bindings, setBindings] = useState<
@@ -277,26 +254,35 @@ export default function Workspace({
     setError('');
     setApprovalMessage('');
   }
-  const newStructured = questionType === 'Structured' && generationMode === 'new';
+  const newStructured =
+    questionType === 'Structured' && generationMode === 'new';
   const brief: Brief = {
     module,
     topic,
     subtopics:
-      questionType === 'MCQ'
+      questionType === 'MCQ' && generationMode === 'new'
         ? topics.filter((t) => t.parent === topic).map((t) => t.id)
         : subs,
     questionType,
     creativeContext: newStructured && creative,
+    useFormulaSheet:
+      questionType === 'Structured' &&
+      difficulty === 'Challenging' &&
+      useFormulaSheet &&
+      !!formulasForBrief({ module, subtopics: subs }),
+    nonRoutine:
+      questionType === 'Structured' &&
+      difficulty === 'Challenging' &&
+      nonRoutine,
     autoParts: newStructured && multiple && autoParts,
     multipleParts: newStructured && multiple,
-    partCount:
-      newStructured && multiple && !autoParts
-        ? Number(partCount)
-        : 2,
-    totalMarks: questionType === 'MCQ' ? 2 : Number(marks),
+    partCount: newStructured && multiple && !autoParts ? Number(partCount) : 2,
+    totalMarks:
+      questionType === 'MCQ' ? 2 : difficulty === 'Basic' ? 10 : Number(marks),
     difficulty: questionType === 'MCQ' ? 'Intermediate' : difficulty,
     specifications: generationMode === 'similar' ? '' : spec,
   };
+  const availableFormulas = formulasForBrief(brief);
   const configIssues = configurationIssues(brief, topics);
   const validParts =
     !newStructured ||
@@ -315,60 +301,41 @@ export default function Workspace({
     subOptions.length > 0 && subOptions.every((t) => subs.includes(t.id));
   const requestId = useRef(0);
   const abort = useRef<AbortController | null>(null);
-  const referenceCache = useRef(new Map<string, {at: number; references: Ref[]; exactExamples: number}>());
-  const [referenceRetry, setReferenceRetry] = useState(0);
-  const referenceKey = referenceRequest(brief);
-  useEffect(() => {
-    const controller = new AbortController();
-    const cached = referenceCache.current.get(referenceKey);
-    if (cached && Date.now() - cached.at < 60000) {
-      setRefs(cached.references);
-      setExact(cached.exactExamples);
-      setReferencesLoading(false);
-      setReferenceError('');
-      return;
-    }
+  const browseKey = JSON.stringify({
+    module,
+    topic,
+    questionType,
+    subtopics: [...brief.subtopics].sort(),
+  });
+  const sourceSelectionValid = sourceKey === browseKey && !!selectedSource;
+  async function browseSources() {
+    if (configIssues.length || referencesLoading) return;
     setReferencesLoading(true);
     setReferenceError('');
-    setRefs([]);
-    let deadline: ReturnType<typeof setTimeout> | undefined;
-    const timer = setTimeout(() => {
-      deadline = setTimeout(() => {
-        controller.abort();
-        setReferencesLoading(false);
-        setReferenceError('The source check took too long. Please retry. Your selections have been kept.');
-      }, 20000);
-      fetch('/api/references', {
+    setSelectedSource('');
+    const key = browseKey;
+    try {
+      const response = await fetch('/api/source-questions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: referenceKey,
-        signal: controller.signal,
-      })
-        .then(async (r) => {
-          const d: any = await readServiceJSON(r, 'Reference retrieval');
-          if (!r.ok) throw new Error(d.error);
-          if (controller.signal.aborted) return;
-          if (referenceCache.current.size >= 30) referenceCache.current.delete(referenceCache.current.keys().next().value!);
-          referenceCache.current.set(referenceKey, {...d, at: Date.now()});
-          setRefs(d.references);
-          setExact(d.exactExamples);
-          setReferencesLoading(false);
-        })
-        .catch((e) => {
-          if (!controller.signal.aborted && e.name !== 'AbortError') {
-            setRefs([]);
-            setExact(0);
-            setReferenceError(e.message);
-            setReferencesLoading(false);
-          }
-        }).finally(() => clearTimeout(deadline));
-    }, 350);
-    return () => {
-      clearTimeout(timer);
-      clearTimeout(deadline);
-      controller.abort();
-    };
-  }, [referenceKey, referenceRetry]);
+        body: JSON.stringify(brief),
+        signal: AbortSignal.timeout(20000),
+      });
+      const data = await readServiceJSON(response, 'Source browsing');
+      if (!response.ok) throw new Error(data.error);
+      setRefs(data.references);
+      setExact(data.exactExamples);
+      setSourceKey(key);
+    } catch (e) {
+      setReferenceError(
+        (e as Error).name === 'TimeoutError'
+          ? 'Source browsing took too long. Try Browse source questions again.'
+          : (e as Error).message,
+      );
+    } finally {
+      setReferencesLoading(false);
+    }
+  }
   useEffect(() => {
     setError('');
   }, [
@@ -388,16 +355,21 @@ export default function Workspace({
   async function generate(isEdit = false) {
     setGenerationError(true);
     setApprovalMessage('');
-    if (!isEdit && (configIssues.length || referenceError)) {
+    if (!isEdit && configIssues.length) {
       setError(
-        configIssues.map((i) => i.field + ': ' + i.recommendation).join(' ') ||
-          referenceError,
+        configIssues.map((i) => i.field + ': ' + i.recommendation).join(' '),
       );
       return;
     }
     if (!isEdit && (!validMarks || !validParts || !brief.subtopics.length)) {
       setError(
         'Select at least one sub-topic, valid marks and a whole-number part count from 2 to 6 when enabled.',
+      );
+      return;
+    }
+    if (!isEdit && generationMode === 'similar' && !sourceSelectionValid) {
+      setError(
+        'Browse source questions and choose a source for the current selections.',
       );
       return;
     }
@@ -419,16 +391,17 @@ export default function Workspace({
       const batchId = isEdit ? history!.activeId! : crypto.randomUUID();
       const d: any = await generationRequest(
         JSON.stringify({
-          brief: isEdit
-            ? result?.draft.question_type === 'MCQ'
-              ? result.effectiveBrief
-              : result?.brief
-            : brief,
+          brief: isEdit ? result?.effectiveBrief : brief,
           mode: isEdit ? 'new' : generationMode,
-          sourceQuestionId: isEdit ? result?.sourceQuestionId : undefined,
-          sourceIds:
-            !isEdit && generationMode === 'similar'
-              ? refs.map((r) => r.id)
+          sourceQuestionId: isEdit
+            ? result?.sourceQuestionId
+            : generationMode === 'similar'
+              ? selectedSource
+              : undefined,
+          variation: isEdit
+            ? result?.similarVariation
+            : generationMode === 'similar'
+              ? variation
               : undefined,
           sessionId: history?.sessionId,
           questionId: batchId + ':' + (isEdit ? candidateIndex : 0),
@@ -444,6 +417,8 @@ export default function Workspace({
       const generated: Result[] = (
         isEdit || !d.candidates ? [d] : d.candidates
       ).map((item: unknown) => resultSchema.parse(item));
+      if (isEdit && result)
+        generated[0] = recordRefinement(result, generated[0], edit);
       if (isEdit && result?.generationMode === 'similar') {
         generated[0].generationMode = 'similar';
         generated[0].sourceQuestionId = result.sourceQuestionId;
@@ -486,6 +461,25 @@ export default function Workspace({
         abort.current = null;
       }
     }
+  }
+  function restoreRefinement(index: number) {
+    if (!result || busy) return;
+    const restored = restoreVersion(result, index);
+    setResult(restored);
+    setHistory((current) =>
+      current ? updateQuestion(current, restored) : current,
+    );
+    setCandidates((current) =>
+      current.map((item, i) => (i === candidateIndex ? restored : item)),
+    );
+    setSolution(0);
+    setDiagramIndex(0);
+    setShapeIndex(0);
+    setManual(!!restored.manual);
+    setEdit('');
+    setApprovalMessage(
+      'Earlier version restored as the working draft. Later refinements remain available for comparison.',
+    );
   }
   function viewCandidate(index: number) {
     if (busy || !candidates[index]) return;
@@ -658,7 +652,7 @@ export default function Workspace({
           />
           <p className="hint">
             {generationMode === 'similar'
-              ? 'Randomly adapt one compatible few-shot example, preserving its main method and part structure while changing numbers or context. This creates a separate draft.'
+              ? 'Browse the knowledge base, choose a source question and adapt it into a separate draft.'
               : 'Create an original question using your specifications and source examples for guidance.'}
           </p>
           <fieldset disabled={!!busy || !history}>
@@ -712,7 +706,8 @@ export default function Workspace({
                 );
               }}
             />
-            {questionType === 'Structured' && (
+            {(questionType === 'Structured' ||
+              generationMode === 'similar') && (
               <div className="field">
                 <span id="subtopics-label">Sub-topics</span>
                 <div
@@ -767,6 +762,7 @@ export default function Workspace({
                   onChange={(v) => {
                     setDifficulty(v as Brief['difficulty']);
                     if (v === 'Challenging') setMarks('15');
+                    if (v === 'Basic') setMarks('10');
                   }}
                 />
                 <label className="field">
@@ -775,18 +771,82 @@ export default function Workspace({
                     type="number"
                     min={1}
                     step={1}
-                    value={marks}
+                    value={difficulty === 'Basic' ? '10' : marks}
+                    disabled={difficulty === 'Basic'}
                     aria-invalid={!validMarks}
                     aria-describedby="marks-help"
                     onChange={(e) => setMarks(e.target.value)}
                   />
                   <span id="marks-help" className="hint">
-                    {validMarks
-                      ? 'Whole numbers, minimum 1. Exact marks are prioritised; any necessary adjustments are explained with the question.'
-                      : 'Enter a whole number of marks of at least 1.'}
+                    {difficulty === 'Basic'
+                      ? 'Basic structured questions always total 10 marks.'
+                      : validMarks
+                        ? 'Whole numbers, minimum 1. Exact marks are prioritised; any necessary adjustments are explained with the question.'
+                        : 'Enter a whole number of marks of at least 1.'}
                   </span>
                 </label>
               </>
+            )}
+            {questionType === 'Structured' && difficulty === 'Challenging' && (
+              <div>
+                <label className="subtopic-option" htmlFor="brief-non-routine">
+                  <Checkbox
+                    id="brief-non-routine"
+                    checked={nonRoutine}
+                    onCheckedChange={setNonRoutine}
+                  />
+                  Include at least one non-routine task
+                </label>
+                <p className="hint">
+                  Less guidance; students interpret the question and choose the
+                  concept or method. Challenge comes from reasoning, with fair
+                  marks for it.
+                </p>
+                {availableFormulas && (
+                  <>
+                    <label className="subtopic-option" htmlFor="brief-formula-sheet">
+                      <Checkbox
+                        id="brief-formula-sheet"
+                        checked={useFormulaSheet}
+                        onCheckedChange={setUseFormulaSheet}
+                      />
+                      Students may use the MSA formula sheet
+                    </label>
+                    <p className="hint">
+                      Only formulas mapped to these EM1 sub-topics are available
+                      to generation. Formulas from other modules do not extend the
+                      syllabus.
+                    </p>
+                    <details>
+                      <summary>
+                        View relevant formula-sheet entries (
+                        {availableFormulas.entries.length})
+                      </summary>
+                      <a
+                        href="/api/formula-sheet"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Open full MSA formula sheet (PDF)
+                      </a>
+                      {availableFormulas.entries.map((f) => (
+                        <div key={f.id}>
+                          <p>
+                            <strong>{f.name}</strong> | sheet page {f.page}
+                          </p>
+                          <Maths text={'\\[' + f.latex + '\\]'} />
+                          <p className="hint">{f.conditions}</p>
+                        </div>
+                      ))}
+                    </details>
+                  </>
+                )}
+                {!availableFormulas && (
+                  <p className="hint">
+                    No formula-sheet entries are mapped to these sub-topics.
+                  </p>
+                )}
+              </div>
             )}
             <>
               {newStructured && (
@@ -796,6 +856,14 @@ export default function Workspace({
                 </label>
               )}
             </>
+            {newStructured && creative && (
+              <p className="context-notice">
+                Check the creative context yourself for validity and
+                reasonableness, including the story, dimensions and
+                configuration. AI checks plausibility but do not establish
+                real-world facts.
+              </p>
+            )}
             {newStructured && (
               <>
                 <label className="subtopic-option">
@@ -831,43 +899,36 @@ export default function Workspace({
                 )}
               </>
             )}
-            {generationMode === 'new' ? <label className="field">
-              Additional specifications
-              <Textarea
-                value={spec}
-                onChange={(e) => setSpec(e.target.value)}
-                maxLength={3000}
-                placeholder="For example: two linked parts, use an electrical engineering context…"
+            {generationMode === 'new' ? (
+              <label className="field">
+                Additional specifications
+                <Textarea
+                  value={spec}
+                  onChange={(e) => setSpec(e.target.value)}
+                  maxLength={3000}
+                  placeholder="For example: two linked parts, use an electrical engineering context…"
+                />
+              </label>
+            ) : (
+              <p className="hint">
+                Generate the similar question first. You can make any
+                refinements afterward using Refine draft and recheck.
+              </p>
+            )}
+            {generationMode === 'similar' && (
+              <SourceBrowser
+                references={sourceKey === browseKey ? refs : []}
+                selected={sourceSelectionValid ? selectedSource : ''}
+                onSelect={setSelectedSource}
+                onBrowse={browseSources}
+                loading={referencesLoading}
+                disabled={!!configIssues.length}
+                loaded={sourceKey === browseKey}
+                error={referenceError}
+                variation={variation}
+                onVariation={setVariation}
               />
-            </label> : <p className="hint">Generate the similar question first. You can make any refinements afterward using Refine draft and recheck.</p>}
-            {generationMode === 'similar' &&
-              !referencesLoading &&
-              !configIssues.length && (
-                <details className="source-base-list">
-                  <summary>
-                    Current compatible source examples (
-                    {refs.filter((r) => r.questionType === questionType).length}
-                    )
-                  </summary>
-                  <p className="hint">
-                    One of these examples is selected randomly as the base for
-                    each generated question.
-                  </p>
-                  {refs
-                    .filter((r) => r.questionType === questionType)
-                    .map((r) => (
-                      <p className="hint" key={r.id}>
-                        {r.label}
-                      </p>
-                    ))}
-                  {!refs.some((r) => r.questionType === questionType) && (
-                    <p className="error" role="alert">
-                      No source matches this question type. Choose another topic
-                      or use New question from the brief.
-                    </p>
-                  )}
-                </details>
-              )}
+            )}
             {configIssues.length > 0 && (
               <div className="error" role="alert">
                 <strong>Check the question configuration</strong>
@@ -879,30 +940,15 @@ export default function Workspace({
                 ))}
               </div>
             )}
-            {!configIssues.length && referenceError && (
-              <div className="error" role="alert">
-                {referenceError}
-                <Button variant="outline" onClick={() => setReferenceRetry(n => n + 1)}>Retry source check</Button>
-              </div>
-            )}
-            {referencesLoading && !configIssues.length && (
-              <p className="hint" role="status">
-                Checking source examples...
-              </p>
-            )}
             <Button
               className="generate"
               onClick={() => generate()}
               disabled={
-                (generationMode === 'similar' &&
-                  !refs.some((r) => r.questionType === questionType)) ||
+                (generationMode === 'similar' && !sourceSelectionValid) ||
                 !!configIssues.length ||
-                referencesLoading ||
-                !!referenceError ||
                 !validMarks ||
                 !validParts ||
-                !brief.subtopics.length ||
-                !refs.length
+                !brief.subtopics.length
               }
             >
               <ArrowUpRight size={18} />
@@ -1082,6 +1128,31 @@ export default function Workspace({
               </Button>
             </div>
           )}
+          {result && (
+            <RefinementHistory
+              key={currentKey}
+              result={result}
+              busy={!!busy}
+              onRestore={restoreRefinement}
+            />
+          )}
+          {result && (
+            <TerminologyRules
+              key={result.effectiveBrief.module}
+              module={result.effectiveBrief.module}
+              disabled={!!busy}
+            />
+          )}
+          {result &&
+            (result.effectiveBrief.creativeContext ||
+              (result.review.context_summary &&
+                !/not applicable/i.test(result.review.context_summary))) && (
+              <p className="context-notice">
+                Review this context yourself for validity and reasonableness,
+                including dimensions and configuration. The AI plausibility
+                check does not verify external facts.
+              </p>
+            )}
           {approvalMessage && (
             <p className="review passed" role="status">
               {approvalMessage}
@@ -1092,6 +1163,15 @@ export default function Workspace({
               This working draft has changes. The repository still contains
               approved revision {binding.revision}. Choose “Approve replacement”
               to publish these changes to the repository.
+            </p>
+          )}
+          {result?.formulaSheet && (
+            <p className="hint">
+              Formula sheet available to students: {result.formulaSheet.title} |{' '}
+              {result.formulaSheet.entries.length} relevant entries.{' '}
+              <a href="/api/formula-sheet" target="_blank" rel="noreferrer">
+                View sheet
+              </a>
             </p>
           )}
           {result?.sourceQuestionId && (
@@ -1336,6 +1416,28 @@ export default function Workspace({
                   <summary>Scope, difficulty and calculation checks</summary>
                   <p>{d.scope_explanation}</p>
                   <p>{d.difficulty_explanation}</p>
+                  {result.review.context_summary && (
+                    <p>
+                      <strong>Context plausibility:</strong>{' '}
+                      {result.review.context_summary}
+                    </p>
+                  )}
+                  {result.review.preservation_notes && (
+                    <p>
+                      <strong>Refinement changes:</strong>{' '}
+                      {result.review.preservation_notes}
+                    </p>
+                  )}
+                  {result.review.non_routine_parts?.map((part, i) => (
+                    <p key={i}>
+                      <strong>Non-routine task:</strong> {part}
+                    </p>
+                  ))}
+                  {result.review.scope_evidence?.map((item, i) => (
+                    <p key={i}>
+                      <strong>{item.task}:</strong> {item.evidence}
+                    </p>
+                  ))}
                   <p>
                     {result.calculations.length
                       ? `${result.calculations.length} independent review calculation checks completed.`
@@ -1425,9 +1527,14 @@ export default function Workspace({
           )}
           <section className="references">
             <div className="eyebrow">
-              {result ? 'EXAMPLES USED' : 'RETRIEVAL PREVIEW'}
+              {result ? 'EXAMPLES USED' : 'SOURCE REFERENCES'}
             </div>
             <h3>{shownRefs.length} reference questions</h3>
+            {!result && generationMode === 'new' && (
+              <p className="hint">
+                Sources are retrieved when you click Generate new question.
+              </p>
+            )}
             <p className="hint">
               {result ? result.exactExamples : exact} exact sub-topic matches.
               Related examples stay within the selected topic. Source totals
@@ -1474,6 +1581,8 @@ export default function Workspace({
                     </a>
                   ))}
                 </div>
+                <h4>Source question</h4>
+                <Maths text={ref.question} />
                 <h4>Source solution</h4>
                 <Maths text={ref.solution} />
                 {ref.alternatives.map((s, i) => (

@@ -30,9 +30,11 @@ pnpm cloud seed
 pnpm cloud migrate-local
 ```
 
-These commands have already been run for the initial connected project. Repeat them only when initializing another project, applying migrations or adding seed data. They are safe to rerun: existing source records and repository revisions are preserved. `migrate-local` reads the configured local SQLite database without deleting it; if none exists, it reports that there is nothing to copy. It does not migrate unfinished local PDF imports; finish those locally or upload the PDF pair again after switching.
+These commands have already been run for the initial connected project. Repeat them only when initializing another project, applying migrations or adding seed data. They are safe to rerun: existing source records and repository revisions are preserved. `migrate-local` reads the configured local SQLite database without deleting it and copies approved questions/revisions, saved worksheets, terminology rules and audit records; if none exists, it reports that there is nothing to copy. It does not migrate unfinished local PDF imports; finish those locally or upload the PDF pair again after switching.
 
 Tables are under the **studio** schema in Supabase, not `public`. Browser `anon` and `authenticated` roles have no access. Do not expose that schema through the Data API or make the `studio-sources` bucket public. The app accesses data on the server and creates short-lived storage links through its API.
+
+For the 2026-09-21 update, run `pnpm cloud migrate` before deploying to create `studio.terminology_rules` from `202609210001_terminology.sql`. Local SQLite creates the new table automatically. Deploy the updated prompts, formula catalogue and `data/MSA Formula Sheet.pdf` together; `build:vercel` packages the PDF in each server function. No new environment variables are required.
 
 ## 3. Deploy the repository to Vercel
 

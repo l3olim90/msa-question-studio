@@ -31,6 +31,8 @@ const targets = functions(join(output, 'functions'));
 if (!targets.length)
   throw new Error('Vercel build produced no server function.');
 for (const target of targets) {
+  mkdirSync(join(target, 'data'), { recursive: true });
+  copyFileSync('data/MSA Formula Sheet.pdf', join(target, 'data/MSA Formula Sheet.pdf'));
   copyFileSync('PROMPTS.md', join(target, 'PROMPTS.md'));
   mkdirSync(join(target, 'prompts'), { recursive: true });
   for (const name of readdirSync('prompts').filter((n) => n.endsWith('.md')))
@@ -41,5 +43,5 @@ const scans = resolve(output, 'static/source-questions');
 if (scans.startsWith(output + sep) && existsSync(scans))
   rmSync(scans, { recursive: true, force: true });
 console.log(
-  'Vercel functions packaged with module prompts; public source scans excluded.',
+  'Vercel functions packaged with module prompts and the shared formula sheet; public source scans excluded.',
 );
